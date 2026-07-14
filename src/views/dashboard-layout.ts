@@ -7,6 +7,7 @@ import type {
 	TaskDisplayField,
 } from '../domain/types';
 import { expandCustomDisplayFields } from './task-display-settings';
+import { DASHBOARD_MODULE_CATALOG, isDashboardModuleKind, normalizeDashboardModuleConfig } from './dashboard-modules/config';
 
 const DEFAULT_LIST_FIELDS: TaskDisplayField[] = ['key', 'title', 'status', 'assignee', 'dueDate', 'tags'];
 
@@ -55,9 +56,10 @@ function normalizeCard(
 		taskListDirection: card.taskListDirection === 'vertical' ? 'vertical' : 'horizontal',
 		title: card.title?.trim() || undefined,
 		numberColor: card.numberColor?.trim() || undefined,
-		backgroundColor: kind === 'task-list'
-			? undefined
-			: card.backgroundColor?.trim() || defaultDashboardCardBackground(metric),
+		backgroundColor: kind === 'number' || kind === 'percentage'
+			? card.backgroundColor?.trim() || defaultDashboardCardBackground(metric)
+			: undefined,
+		moduleConfig: isDashboardModuleKind(kind) ? normalizeDashboardModuleConfig(kind, card.moduleConfig) : undefined,
 	};
 }
 
@@ -89,10 +91,13 @@ export function createDashboardCard(
 	kind: DashboardCardKind,
 	order: number,
 ): PersonalDashboardCardLayout {
+	const module = isDashboardModuleKind(kind)
+		? DASHBOARD_MODULE_CATALOG.find((item) => item.kind === kind)
+		: undefined;
 	return normalizeCard({ id, kind }, {
 		order,
-		columnSpan: kind === 'task-list' ? 2 : 1,
-		rowSpan: kind === 'task-list' ? 3 : 1,
+		columnSpan: module?.defaultSize.columns ?? (kind === 'task-list' ? 2 : 1),
+		rowSpan: module?.defaultSize.rows ?? (kind === 'task-list' ? 3 : 1),
 		kind,
 		metric: kind === 'percentage' ? 'completion-rate' : 'total',
 	});

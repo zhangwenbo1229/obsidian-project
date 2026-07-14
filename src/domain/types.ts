@@ -198,7 +198,8 @@ export type CustomTaskDisplayField = `custom:${string}`;
 export type TaskDisplayField = BuiltInTaskDisplayField | CustomTaskDisplayField | 'customFields';
 
 export type PersonalDashboardCardId = string;
-export type DashboardCardKind = 'number' | 'percentage' | 'task-list';
+export type DashboardModuleKind = 'weather' | 'calendar' | 'note-stats' | 'recent-files' | 'news' | 'directory';
+export type DashboardCardKind = 'number' | 'percentage' | 'task-list' | DashboardModuleKind;
 export type DashboardMetric =
 	| 'total'
 	| 'completed'
@@ -221,7 +222,51 @@ export interface PersonalDashboardCardLayout {
 	title?: string;
 	numberColor?: string;
 	backgroundColor?: string;
+	moduleConfig?: DashboardModuleConfig;
 }
+
+export interface WeatherDashboardModuleConfig {
+	networkEnabled: boolean;
+	locationName: string;
+	latitude: number;
+	longitude: number;
+	refreshMinutes: number;
+}
+
+export interface CalendarDashboardModuleConfig {
+	showLunar: boolean;
+	weekStartsOn: 0 | 1;
+}
+
+export interface NoteStatsDashboardModuleConfig {
+	rootPath: string;
+	topFolderLimit: number;
+}
+
+export interface RecentFilesDashboardModuleConfig {
+	rootPath: string;
+	limit: number;
+}
+
+export interface NewsDashboardModuleConfig {
+	networkEnabled: boolean;
+	feedUrls: string[];
+	pageSize: number;
+	refreshMinutes: number;
+}
+
+export interface DirectoryDashboardModuleConfig {
+	rootPaths: string[];
+	maxDepth: number;
+}
+
+export type DashboardModuleConfig =
+	| WeatherDashboardModuleConfig
+	| CalendarDashboardModuleConfig
+	| NoteStatsDashboardModuleConfig
+	| RecentFilesDashboardModuleConfig
+	| NewsDashboardModuleConfig
+	| DirectoryDashboardModuleConfig;
 
 export interface TaskMetadata {
 	kind: 'task';

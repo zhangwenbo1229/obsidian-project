@@ -21,6 +21,7 @@ import { restoreProjectFilter } from './saved-project-filters';
 import { filterProjectTasks, overdueTasks, pendingTasks, taskStatistics } from './selectors';
 import { renderTaskCardFields } from './task-card-fields';
 import { bindTaskCardActivation } from './task-card-interaction';
+import { DASHBOARD_MODULE_DEFINITIONS, getDashboardModuleDefinition } from './dashboard-modules/registry';
 
 export const PERSONAL_VIEW_TYPE = 'obsidian-project-personal';
 
@@ -40,6 +41,8 @@ const STAT_ICONS: Record<DashboardMetric, string> = {
 };
 
 export class PersonalView extends ItemView {
+	private renderGeneration = 0;
+
 	constructor(leaf: WorkspaceLeaf, private readonly manager: ProjectManager) {
 		super(leaf);
 	}
@@ -54,6 +57,7 @@ export class PersonalView extends ItemView {
 	}
 
 	private render(): void {
+		const generation = ++this.renderGeneration;
 		const container = this.containerEl.children[1] as HTMLElement;
 		container.empty();
 		container.addClass('op-view', 'op-personal-view');
@@ -98,7 +102,7 @@ export class PersonalView extends ItemView {
 			});
 			cardEl.addEventListener('contextmenu', (event) => this.openFilterMenu(event, card));
 			this.attachResizeHandle(cardEl, card, workspace);
-			this.renderDashboardCard(cardEl, card, tasks, today);
+			this.renderDashboardCard(cardEl, card, tasks, today, generation);
 		}
 	}
 
@@ -113,11 +117,28 @@ export class PersonalView extends ItemView {
 		card: PersonalDashboardCardLayout,
 		tasks: IndexedTask[],
 		today: string,
+		generation: number,
 	): void {
 		const filter = this.manager.savedProjectFilters.find((item) => item.id === card.filterId);
+		const definition = getDashboardModuleDefinition(card.kind);
 		const heading = cardEl.createDiv({ cls: 'op-dashboard-card-heading' });
-		heading.createEl('strong', { text: card.title ?? CARD_LABELS[card.id] ?? '自定义卡片' });
+		heading.createEl('strong', { text: card.title ?? CARD_LABELS[card.id] ?? definition?.label ?? '自定义卡片' });
 		if (filter) heading.createSpan({ cls: 'op-dashboard-filter-badge', text: filter.name });
+		if (definition) {
+			cardEl.addClass('op-dashboard-module-card', `is-${definition.kind}`);
+			void Promise.resolve(definition.render({
+				container: cardEl,
+				heading,
+				card,
+				manager: this.manager,
+				refresh: () => this.render(),
+				isCurrent: () => this.renderGeneration === generation && cardEl.isConnected,
+			})).catch((error: unknown) => {
+				if (this.renderGeneration !== generation || !cardEl.isConnected) return;
+				cardEl.createDiv({ cls: 'op-dashboard-module-error', text: error instanceof Error ? error.message : String(error) });
+			});
+			return;
+		}
 		if (card.kind === 'task-list') {
 			const selected = this.tasksForMetric(tasks, card.metric, today);
 			heading.createSpan({ cls: 'op-count-pill', text: String(selected.length) });
@@ -176,6 +197,9 @@ export class PersonalView extends ItemView {
 		addCard('number', '新增数字卡片', 'hash');
 		addCard('percentage', '新增百分比卡片', 'percent');
 		addCard('task-list', '新增任务列表卡片', 'list-checks');
+		for (const definition of DASHBOARD_MODULE_DEFINITIONS) {
+			addCard(definition.kind, `新增${definition.label}卡片`, definition.icon);
+		}
 		menu.showAtMouseEvent(event);
 	}
 
@@ -191,6 +215,10 @@ export class PersonalView extends ItemView {
 					deleteDashboardCard(this.manager.personalDashboardLayout, card.id),
 				).then(() => this.render());
 			}));
+		}
+		if (getDashboardModuleDefinition(card.kind)) {
+			menu.showAtMouseEvent(event);
+			return;
 		}
 		menu.addSeparator();
 		menu.addItem((item) => item.setTitle('不绑定筛选器').setChecked(card.filterId === null).onClick(() => {

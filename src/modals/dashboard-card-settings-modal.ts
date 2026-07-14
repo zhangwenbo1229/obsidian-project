@@ -2,18 +2,24 @@ import { Modal, Notice, Setting } from 'obsidian';
 import type {
 	DashboardCardKind,
 	DashboardMetric,
+	DashboardModuleConfig,
 	PersonalDashboardCardLayout,
 	TaskDisplayField,
 } from '../domain/types';
 import type { ProjectManager } from '../services/project-manager';
 import { defaultDashboardCardBackground, updateDashboardCard } from '../views/dashboard-layout';
 import { SortableDisplayFields } from '../settings/sortable-display-fields';
+import { DASHBOARD_MODULE_CATALOG, isDashboardModuleKind, normalizeDashboardModuleConfig } from '../views/dashboard-modules/config';
+import { getDashboardModuleDefinition } from '../views/dashboard-modules/registry';
 
-const CARD_KIND_LABELS: Record<DashboardCardKind, string> = {
+const CARD_KIND_LABELS = Object.fromEntries([
+	...Object.entries({
 	number: '数字',
 	percentage: '百分比',
 	'task-list': '任务列表',
-};
+	}),
+	...DASHBOARD_MODULE_CATALOG.map((item) => [item.kind, item.label]),
+]) as Record<DashboardCardKind, string>;
 
 const METRIC_LABELS: Record<DashboardMetric, string> = {
 	total: '任务总数',
@@ -34,6 +40,7 @@ export class DashboardCardSettingsModal extends Modal {
 	private filterId: string | null;
 	private displayFields: TaskDisplayField[];
 	private taskListDirection: 'horizontal' | 'vertical';
+	private moduleConfig: DashboardModuleConfig | undefined;
 
 	constructor(
 		private readonly manager: ProjectManager,
@@ -50,6 +57,9 @@ export class DashboardCardSettingsModal extends Modal {
 		this.filterId = card.filterId;
 		this.displayFields = [...card.displayFields];
 		this.taskListDirection = card.taskListDirection ?? 'horizontal';
+		this.moduleConfig = isDashboardModuleKind(card.kind)
+			? normalizeDashboardModuleConfig(card.kind, card.moduleConfig)
+			: undefined;
 	}
 
 	onOpen(): void {
@@ -72,9 +82,22 @@ export class DashboardCardSettingsModal extends Modal {
 						this.kind = value as DashboardCardKind;
 						this.metric = this.kind === 'percentage' ? 'completion-rate' : 'total';
 						this.backgroundColor = defaultDashboardCardBackground(this.metric);
-					this.renderContent();
-				});
+						this.moduleConfig = isDashboardModuleKind(this.kind)
+							? normalizeDashboardModuleConfig(this.kind, null)
+							: undefined;
+						this.renderContent();
+					});
 			});
+		const definition = getDashboardModuleDefinition(this.kind);
+		if (definition && this.moduleConfig) {
+			definition.renderSettings({
+				container: this.contentEl,
+				config: this.moduleConfig,
+				update: (config) => (this.moduleConfig = config),
+			});
+			this.renderActions();
+			return;
+		}
 
 		new Setting(this.contentEl)
 			.setName('数据源')
@@ -106,12 +129,17 @@ export class DashboardCardSettingsModal extends Modal {
 			this.renderDisplayFields();
 		}
 
+		this.renderActions();
+	}
+
+	private renderActions(): void {
 		new Setting(this.contentEl)
 			.addButton((button) => button.setButtonText('恢复默认').onClick(() => {
 				this.title = '';
 				this.numberColor = '';
 				this.backgroundColor = defaultDashboardCardBackground(this.metric);
 				this.filterId = null;
+				if (isDashboardModuleKind(this.kind)) this.moduleConfig = normalizeDashboardModuleConfig(this.kind, null);
 				void this.save();
 			}))
 			.addButton((button) => button.setButtonText('保存').setCta().onClick(() => void this.save()));
@@ -158,6 +186,7 @@ export class DashboardCardSettingsModal extends Modal {
 					title: this.title.trim() === this.defaultTitle ? undefined : this.title.trim() || undefined,
 					numberColor: this.kind === 'task-list' ? undefined : this.numberColor || undefined,
 					backgroundColor: this.kind === 'task-list' ? undefined : this.backgroundColor,
+					moduleConfig: isDashboardModuleKind(this.kind) ? this.moduleConfig : undefined,
 				},
 			));
 			this.close();
