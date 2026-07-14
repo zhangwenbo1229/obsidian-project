@@ -1748,7 +1748,7 @@
 	resize: none;
 	border: 1px solid color-mix(in srgb, var(--text-muted) 24%, var(--background-modifier-border));
 	border-radius: 8px;
-	background: var(--background-primary);
+	background: color-mix(in srgb, var(--op-dashboard-card-background, var(--interactive-accent)) 12%, var(--background-primary));
 	box-shadow: 0 1px 2px rgb(9 30 66 / 8%), 0 6px 18px rgb(9 30 66 / 8%);
 	container-type: inline-size;
 	scrollbar-width: none;
@@ -1865,7 +1865,7 @@
 	flex-direction: column;
 	overflow: hidden;
 	background:
-		linear-gradient(145deg, color-mix(in srgb, var(--background-primary) 96%, var(--interactive-accent) 4%), var(--background-primary));
+		linear-gradient(145deg, color-mix(in srgb, var(--op-dashboard-card-background) 18%, var(--background-primary)), var(--background-primary));
 }
 .op-dashboard-module-card .op-dashboard-card-heading {
 	z-index: 2;
@@ -1947,10 +1947,10 @@
 	gap: 12px;
 }
 .op-dashboard-module-card.is-weather {
-	--op-weather-accent: var(--color-blue);
+	--op-weather-accent: var(--op-dashboard-card-background, var(--color-blue));
 	background:
 		radial-gradient(circle at 86% 8%, color-mix(in srgb, var(--op-weather-accent) 18%, transparent), transparent 40%),
-		linear-gradient(145deg, color-mix(in srgb, var(--background-primary) 94%, var(--color-cyan) 6%), var(--background-primary));
+		linear-gradient(145deg, color-mix(in srgb, var(--op-weather-accent) 16%, var(--background-primary)), var(--background-primary));
 }
 .op-weather-current {
 	display: grid;
@@ -1972,7 +1972,7 @@
 .op-weather-temperature strong { font-family: var(--font-monospace); font-size: clamp(30px, 14cqi, 52px); line-height: 0.95; letter-spacing: -0.08em; }
 .op-weather-temperature span { margin-top: 4px; color: var(--text-muted); font-size: 11px; }
 .op-weather-details { display: grid; gap: 4px; color: var(--text-muted); font-size: 10px; text-align: right; }
-.op-weather-forecast { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.op-weather-forecast { display: grid; grid-template-columns: repeat(auto-fit, minmax(74px, 1fr)); gap: 6px; }
 .op-weather-forecast-day {
 	display: grid;
 	grid-template-columns: auto 1fr;
@@ -1988,9 +1988,10 @@
 .op-weather-forecast-icon { justify-self: end; color: var(--op-weather-accent); }
 .op-weather-forecast-icon svg { width: 15px; height: 15px; }
 
-.op-calendar-card { overflow: hidden; }
-.op-module-calendar-caption { margin: 1px 0 7px; color: var(--text-muted); font-family: var(--font-monospace); font-size: 11px; }
-.op-module-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+.op-calendar-card { overflow: auto; }
+.op-dashboard-module-card.is-calendar .op-dashboard-card-heading { flex-wrap: wrap; }
+.op-dashboard-module-card.is-calendar .op-dashboard-module-subtitle { display: inline; max-width: none; }
+.op-module-calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(36px, 1fr)); gap: 3px; min-width: 280px; }
 .op-module-calendar-weekday { padding: 3px 0 5px; color: var(--text-faint); font-size: 9px; font-weight: 700; text-align: center; }
 .op-module-calendar-day {
 	position: relative;
@@ -2003,7 +2004,7 @@
 	border-radius: 8px;
 }
 .op-module-calendar-day:hover { background: var(--background-modifier-hover); }
-.op-module-calendar-day.is-outside { opacity: 0.34; }
+.op-module-calendar-day.is-outside { opacity: 0.18; }
 .op-module-calendar-day.is-today { background: var(--interactive-accent); color: var(--text-on-accent); }
 .op-module-calendar-day-number { font-family: var(--font-monospace); font-size: 11px; font-weight: 650; }
 .op-module-calendar-annotation { max-width: 100%; overflow: hidden; color: var(--text-faint); font-size: 7px; text-overflow: ellipsis; white-space: nowrap; }
@@ -2098,6 +2099,7 @@
 @container (max-width: 300px) {
 	.op-dashboard-module-card { padding: 11px; }
 	.op-dashboard-module-subtitle { display: none; }
+	.op-dashboard-module-card.is-calendar .op-dashboard-module-actions { width: 100%; justify-content: flex-end; }
 	.op-weather-current { grid-template-columns: auto minmax(0, 1fr); }
 	.op-weather-details { display: none; }
 	.op-weather-forecast-day { grid-template-columns: 1fr; place-items: center; text-align: center; }

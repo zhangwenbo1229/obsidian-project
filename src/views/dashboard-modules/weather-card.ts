@@ -53,7 +53,7 @@ async function renderWeather(context: DashboardModuleRenderContext): Promise<voi
 		body.empty();
 		renderModuleMessage(body, 'loader-circle', '正在更新天气', '正在连接 Open-Meteo。', 'op-dashboard-module-loading');
 		try {
-			const snapshot = await weatherService.load(config.latitude, config.longitude, config.refreshMinutes, force);
+			const snapshot = await weatherService.load(config.latitude, config.longitude, config.refreshMinutes, force, config.forecastDays);
 			if (!context.isCurrent() || currentLoad !== loadGeneration) return;
 			renderSnapshot(body, snapshot);
 		} catch (error) {

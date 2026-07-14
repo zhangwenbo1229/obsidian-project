@@ -51,7 +51,7 @@ export class DashboardCardSettingsModal extends Modal {
 		super(manager.app);
 		this.title = card.title ?? defaultTitle;
 		this.numberColor = card.numberColor ?? '#0c66e4';
-		this.backgroundColor = card.backgroundColor ?? defaultDashboardCardBackground(card.metric);
+		this.backgroundColor = card.backgroundColor ?? defaultDashboardCardBackground(card.metric, card.kind);
 		this.kind = card.kind;
 		this.metric = card.metric;
 		this.filterId = card.filterId;
@@ -81,13 +81,14 @@ export class DashboardCardSettingsModal extends Modal {
 					dropdown.setValue(this.kind).onChange((value) => {
 						this.kind = value as DashboardCardKind;
 						this.metric = this.kind === 'percentage' ? 'completion-rate' : 'total';
-						this.backgroundColor = defaultDashboardCardBackground(this.metric);
+						this.backgroundColor = defaultDashboardCardBackground(this.metric, this.kind);
 						this.moduleConfig = isDashboardModuleKind(this.kind)
 							? normalizeDashboardModuleConfig(this.kind, null)
 							: undefined;
 						this.renderContent();
 					});
 			});
+		this.renderBackgroundSetting();
 		const definition = getDashboardModuleDefinition(this.kind);
 		if (definition && this.moduleConfig) {
 			definition.renderSettings({
@@ -113,10 +114,6 @@ export class DashboardCardSettingsModal extends Modal {
 			new Setting(this.contentEl)
 				.setName('数字颜色')
 				.addColorPicker((picker) => picker.setValue(this.numberColor).onChange((value) => (this.numberColor = value)));
-			new Setting(this.contentEl)
-				.setName('背景颜色')
-				.setDesc('颜色会与当前主题背景柔和混合，保持标题和数字清晰可读。')
-				.addColorPicker((picker) => picker.setValue(this.backgroundColor).onChange((value) => (this.backgroundColor = value)));
 		} else {
 			new Setting(this.contentEl)
 				.setName('排列方向')
@@ -137,12 +134,19 @@ export class DashboardCardSettingsModal extends Modal {
 			.addButton((button) => button.setButtonText('恢复默认').onClick(() => {
 				this.title = '';
 				this.numberColor = '';
-				this.backgroundColor = defaultDashboardCardBackground(this.metric);
+				this.backgroundColor = defaultDashboardCardBackground(this.metric, this.kind);
 				this.filterId = null;
 				if (isDashboardModuleKind(this.kind)) this.moduleConfig = normalizeDashboardModuleConfig(this.kind, null);
 				void this.save();
 			}))
 			.addButton((button) => button.setButtonText('保存').setCta().onClick(() => void this.save()));
+	}
+
+	private renderBackgroundSetting(): void {
+		new Setting(this.contentEl)
+			.setName('背景颜色')
+			.setDesc('颜色会与当前主题背景柔和混合，保持卡片内容清晰可读。')
+			.addColorPicker((picker) => picker.setValue(this.backgroundColor).onChange((value) => (this.backgroundColor = value)));
 	}
 
 	private renderMetricSetting(): void {
@@ -155,9 +159,9 @@ export class DashboardCardSettingsModal extends Modal {
 			.addDropdown((dropdown) => {
 				for (const metric of metrics) dropdown.addOption(metric, METRIC_LABELS[metric]);
 				dropdown.setValue(this.metric).onChange((value) => {
-					const usedDefault = this.backgroundColor === defaultDashboardCardBackground(this.metric);
+					const usedDefault = this.backgroundColor === defaultDashboardCardBackground(this.metric, this.kind);
 					this.metric = value as DashboardMetric;
-					if (usedDefault) this.backgroundColor = defaultDashboardCardBackground(this.metric);
+					if (usedDefault) this.backgroundColor = defaultDashboardCardBackground(this.metric, this.kind);
 					this.renderContent();
 				});
 			});
@@ -184,8 +188,8 @@ export class DashboardCardSettingsModal extends Modal {
 					displayFields: [...this.displayFields],
 					taskListDirection: this.taskListDirection,
 					title: this.title.trim() === this.defaultTitle ? undefined : this.title.trim() || undefined,
-					numberColor: this.kind === 'task-list' ? undefined : this.numberColor || undefined,
-					backgroundColor: this.kind === 'task-list' ? undefined : this.backgroundColor,
+					numberColor: this.kind === 'number' || this.kind === 'percentage' ? this.numberColor || undefined : undefined,
+					backgroundColor: this.backgroundColor,
 					moduleConfig: isDashboardModuleKind(this.kind) ? this.moduleConfig : undefined,
 				},
 			));

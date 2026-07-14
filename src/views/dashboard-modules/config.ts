@@ -42,6 +42,12 @@ function normalizedPaths(value: unknown): string[] {
 		: [];
 }
 
+function normalizedDirectoryPaths(value: unknown): string[] {
+	return normalizedPaths(value)
+		.map((item) => item.replace(/^\/+|\/+$/gu, ''))
+		.filter(Boolean);
+}
+
 function normalizedFeedUrls(value: unknown): string[] {
 	return normalizedPaths(value).filter((item) => {
 		try {
@@ -60,6 +66,7 @@ export function normalizeDashboardModuleConfig(kind: DashboardModuleKind, value:
 		locationName: typeof source.locationName === 'string' && source.locationName.trim() ? source.locationName.trim() : '上海',
 		latitude: boundedNumber(source.latitude, 31.2304, -90, 90),
 		longitude: boundedNumber(source.longitude, 121.4737, -180, 180),
+		forecastDays: boundedNumber(source.forecastDays, 3, 1, 7),
 		refreshMinutes: boundedNumber(source.refreshMinutes, 30, 10, 360),
 	} satisfies WeatherDashboardModuleConfig;
 	if (kind === 'calendar') return {
@@ -68,10 +75,12 @@ export function normalizeDashboardModuleConfig(kind: DashboardModuleKind, value:
 	} satisfies CalendarDashboardModuleConfig;
 	if (kind === 'note-stats') return {
 		rootPath: typeof source.rootPath === 'string' ? source.rootPath.trim().replace(/^\/+|\/+$/gu, '') : '',
+		excludePaths: normalizedDirectoryPaths(source.excludePaths),
 		topFolderLimit: boundedNumber(source.topFolderLimit, 5, 1, 12),
 	} satisfies NoteStatsDashboardModuleConfig;
 	if (kind === 'recent-files') return {
 		rootPath: typeof source.rootPath === 'string' ? source.rootPath.trim().replace(/^\/+|\/+$/gu, '') : '',
+		excludePaths: normalizedDirectoryPaths(source.excludePaths),
 		limit: boundedNumber(source.limit, 8, 3, 30),
 	} satisfies RecentFilesDashboardModuleConfig;
 	if (kind === 'news') return {

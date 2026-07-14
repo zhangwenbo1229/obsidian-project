@@ -90,6 +90,7 @@ export class PersonalView extends ItemView {
 			cardEl.style.gridColumn = `span ${card.columnSpan}`;
 			cardEl.style.gridRow = `span ${card.rowSpan}`;
 			cardEl.style.minHeight = `${card.rowSpan * 112}px`;
+			cardEl.style.setProperty('--op-dashboard-card-background', card.backgroundColor ?? defaultDashboardCardBackground(card.metric, card.kind));
 			cardEl.addEventListener('dragstart', (event) => event.dataTransfer?.setData('text/plain', card.id));
 			cardEl.addEventListener('dragover', (event) => event.preventDefault());
 			cardEl.addEventListener('drop', (event) => {
@@ -147,7 +148,7 @@ export class PersonalView extends ItemView {
 			return;
 		}
 		cardEl.addClass('op-dashboard-stat-card');
-		cardEl.style.setProperty('--op-dashboard-card-accent', card.backgroundColor ?? defaultDashboardCardBackground(card.metric));
+		cardEl.style.setProperty('--op-dashboard-card-accent', card.backgroundColor ?? defaultDashboardCardBackground(card.metric, card.kind));
 		const stats = taskStatistics(tasks, today);
 		const total = stats.completed + stats.incomplete + stats.terminated;
 		const values: Record<DashboardMetric, number> = {
@@ -183,6 +184,7 @@ export class PersonalView extends ItemView {
 		event.preventDefault();
 		const menu = new Menu();
 		const addCard = (kind: DashboardCardKind, title: string, icon: string) => {
+			if (!this.isCardKindEnabled(kind)) return;
 			menu.addItem((item) => item.setTitle(title).setIcon(icon).onClick(() => {
 				const card = createDashboardCard(createUuid(), kind, this.manager.personalDashboardLayout.length);
 				void this.manager.savePersonalDashboardLayout([
@@ -201,6 +203,10 @@ export class PersonalView extends ItemView {
 			addCard(definition.kind, `新增${definition.label}卡片`, definition.icon);
 		}
 		menu.showAtMouseEvent(event);
+	}
+
+	private isCardKindEnabled(kind: DashboardCardKind): boolean {
+		return this.manager.personalDashboardSettings.enabledCardKinds.includes(kind);
 	}
 
 	private openFilterMenu(event: MouseEvent, card: PersonalDashboardCardLayout): void {

@@ -45,6 +45,7 @@ import { normalizeDashboardLayout } from '../views/dashboard-layout';
 import { normalizeConfigurationSnapshot } from '../settings/configuration-store';
 import { normalizeProjectViewDisplay, type ProjectViewDisplaySettings } from '../views/task-display-settings';
 import { removeTagGroupAssignments, renameTagGroupAssignments, rootTagPath } from './tag-group-service';
+import { normalizePersonalDashboardSettings, type PersonalDashboardSettings } from '../views/personal-dashboard-settings';
 
 export const DEFAULT_GLOBAL_CONFIG_PATH = '项目管理/全局配置.md';
 
@@ -59,6 +60,7 @@ export class ProjectManager {
 	taskTemplates: TaskConfigurationTemplate[] = [];
 	savedProjectFilters: SavedProjectFilter[] = [];
 	personalDashboardLayout: PersonalDashboardCardLayout[] = [];
+	personalDashboardSettings: PersonalDashboardSettings = normalizePersonalDashboardSettings();
 	projectViewDisplay: ProjectViewDisplaySettings = normalizeProjectViewDisplay();
 	dataIssues: PathIssue[] = [];
 	pendingMigrations: MigrationJournalState[] = [];
@@ -250,6 +252,7 @@ export class ProjectManager {
 		this.taskTemplates = structuredClone(normalized.taskTemplates);
 		this.savedProjectFilters = structuredClone(normalized.savedProjectFilters);
 		this.personalDashboardLayout = normalizeDashboardLayout(normalized.personalDashboardLayout, customFields);
+		this.personalDashboardSettings = normalizePersonalDashboardSettings(normalized.personalDashboardSettings);
 		this.projectViewDisplay = normalizeProjectViewDisplay(normalized.projectViewDisplay, customFields);
 	}
 
@@ -268,6 +271,7 @@ export class ProjectManager {
 			taskTemplates: structuredClone(this.taskTemplates),
 			savedProjectFilters: structuredClone(this.savedProjectFilters),
 			personalDashboardLayout: structuredClone(this.personalDashboardLayout),
+			personalDashboardSettings: normalizePersonalDashboardSettings(this.personalDashboardSettings),
 			projectViewDisplay: normalizeProjectViewDisplay(this.projectViewDisplay, this.configurationCustomFields()),
 		};
 	}
@@ -358,6 +362,12 @@ export class ProjectManager {
 	async savePersonalDashboardLayout(layout: readonly PersonalDashboardCardLayout[]): Promise<void> {
 		this.personalDashboardLayout = normalizeDashboardLayout(layout, this.configurationCustomFields());
 		await this.persistConfiguration();
+	}
+
+	async savePersonalDashboardSettings(settings: PersonalDashboardSettings): Promise<void> {
+		this.personalDashboardSettings = normalizePersonalDashboardSettings(settings);
+		await this.persistConfiguration();
+		for (const listener of this.listeners) listener();
 	}
 
 	async saveProjectViewDisplay(settings: ProjectViewDisplaySettings): Promise<void> {
@@ -891,6 +901,7 @@ function defaultConfiguration(): ConfigurationSnapshot {
 		taskTemplates: [],
 		savedProjectFilters: [],
 		personalDashboardLayout: [],
+		personalDashboardSettings: normalizePersonalDashboardSettings(),
 		projectViewDisplay: normalizeProjectViewDisplay(),
 	};
 }

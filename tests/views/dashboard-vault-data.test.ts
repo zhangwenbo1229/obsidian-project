@@ -3,6 +3,7 @@ import {
 	buildDirectoryTree,
 	collectNoteStatistics,
 	filterFilesByRoot,
+	filterFilesByScope,
 	formatRelativeTime,
 	selectRecentFiles,
 } from '../../src/views/dashboard-modules/vault-data';
@@ -21,6 +22,24 @@ describe('dashboard vault data', () => {
 		expect(selectRecentFiles(files, '', 2).map((file) => file.path)).toEqual([
 			'Work/Plans/Beta.md', 'Personal/Gamma.md',
 		]);
+	});
+
+	it('excludes configured directories without excluding similarly prefixed siblings', () => {
+		const scoped = filterFilesByScope([
+			...files,
+			{ path: 'Work/Archive/Old.md', basename: 'Old', stat: { mtime: 800, ctime: 1, size: 2 } },
+			{ path: 'Work/Archive-old/Keep.md', basename: 'Keep', stat: { mtime: 700, ctime: 1, size: 2 } },
+		], 'Work', ['Work/Archive']);
+		expect(scoped.map((file) => file.path)).toEqual([
+			'Work/Alpha.md', 'Work/Plans/Beta.md', 'Work/Archive-old/Keep.md',
+		]);
+	});
+
+	it('applies directory exclusions to recent files and note statistics', async () => {
+		const recent = selectRecentFiles(files, '', 10, ['Personal']);
+		expect(recent.map((file) => file.path)).toEqual(['Work/Plans/Beta.md', 'Work/Alpha.md']);
+		const stats = await collectNoteStatistics(files, () => Promise.resolve('x'), '', 5, ['Work/Plans']);
+		expect(stats.noteCount).toBe(2);
 	});
 
 	it('collects note, character, folder and top-folder statistics', async () => {

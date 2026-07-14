@@ -8,7 +8,7 @@ import { formatRelativeTime, selectRecentFiles } from './vault-data';
 function renderRecentFiles(context: DashboardModuleRenderContext): void {
 	const body = createModuleBody(context.container, 'op-recent-files-card');
 	const config = context.card.moduleConfig as RecentFilesDashboardModuleConfig;
-	const files = selectRecentFiles(context.manager.app.vault.getMarkdownFiles(), config.rootPath, config.limit);
+	const files = selectRecentFiles(context.manager.app.vault.getMarkdownFiles(), config.rootPath, config.limit, config.excludePaths);
 	if (files.length === 0) {
 		renderModuleMessage(body, 'file-clock', '暂无最近文件', '所选目录中还没有 Markdown 笔记。');
 		return;

@@ -41,6 +41,11 @@ export function renderWeatherSettings(context: DashboardModuleSettingsContext): 
 	new Setting(context.container).setName('经度').addText((text) => text
 		.setValue(String(config.longitude))
 		.onChange((value) => update({ longitude: parseNumber(value, config.longitude) })));
+	new Setting(context.container).setName('预报天数').setDesc('显示今天起最近 1–7 天的天气。').addSlider((slider) => slider
+		.setLimits(1, 7, 1)
+		.setDynamicTooltip()
+		.setValue(config.forecastDays)
+		.onChange((forecastDays) => update({ forecastDays })));
 	new Setting(context.container).setName('刷新间隔').setDesc('10–360 分钟；也可以在卡片右上角手动刷新。').addSlider((slider) => slider
 		.setLimits(10, 360, 10)
 		.setDynamicTooltip()
@@ -76,6 +81,10 @@ export function renderNoteStatsSettings(context: DashboardModuleSettingsContext)
 		.setPlaceholder('例如：笔记/工作')
 		.setValue(config.rootPath)
 		.onChange((rootPath) => update({ rootPath })));
+	new Setting(context.container).setName('排除目录').setDesc('每行一个相对库根目录的路径，并排除其全部子目录。').addTextArea((area) => area
+		.setPlaceholder('模板\n归档')
+		.setValue(config.excludePaths.join('\n'))
+		.onChange((value) => update({ excludePaths: value.split(/\r?\n/u).map((item) => item.trim()).filter(Boolean) })));
 	new Setting(context.container).setName('目录排行数量').addSlider((slider) => slider
 		.setLimits(1, 12, 1)
 		.setDynamicTooltip()
@@ -94,6 +103,10 @@ export function renderRecentFilesSettings(context: DashboardModuleSettingsContex
 		.setPlaceholder('留空表示整个库')
 		.setValue(config.rootPath)
 		.onChange((rootPath) => update({ rootPath })));
+	new Setting(context.container).setName('排除目录').setDesc('每行一个相对库根目录的路径，并排除其全部子目录。').addTextArea((area) => area
+		.setPlaceholder('模板\n归档')
+		.setValue(config.excludePaths.join('\n'))
+		.onChange((value) => update({ excludePaths: value.split(/\r?\n/u).map((item) => item.trim()).filter(Boolean) })));
 	new Setting(context.container).setName('显示数量').addSlider((slider) => slider
 		.setLimits(3, 30, 1)
 		.setDynamicTooltip()

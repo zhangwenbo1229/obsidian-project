@@ -15,6 +15,7 @@ async function renderNoteStats(context: DashboardModuleRenderContext): Promise<v
 		(file) => context.manager.app.vault.cachedRead(file),
 		config.rootPath,
 		config.topFolderLimit,
+		config.excludePaths,
 	);
 	if (!context.isCurrent()) return;
 	body.empty();

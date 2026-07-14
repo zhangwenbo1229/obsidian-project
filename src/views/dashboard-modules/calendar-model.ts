@@ -1,6 +1,6 @@
 export interface DashboardCalendarCell {
 	isoDate: string;
-	day: number;
+	day: number | null;
 	inCurrentMonth: boolean;
 	isToday: boolean;
 	holiday?: string;
@@ -54,12 +54,13 @@ export function buildCalendarMonth(
 	const cells = Array.from({ length: cellCount }, (_, index): DashboardCalendarCell => {
 		const date = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + index);
 		const isoDate = localIsoDate(date);
-		const holiday = FIXED_HOLIDAYS[isoDate.slice(5)];
-		const lunarLabel = showLunar ? formatChineseLunarDay(date) : undefined;
+		const inCurrentMonth = date.getMonth() === month;
+		const holiday = inCurrentMonth ? FIXED_HOLIDAYS[isoDate.slice(5)] : undefined;
+		const lunarLabel = inCurrentMonth && showLunar ? formatChineseLunarDay(date) : undefined;
 		return {
 			isoDate,
-			day: date.getDate(),
-			inCurrentMonth: date.getMonth() === month,
+			day: inCurrentMonth ? date.getDate() : null,
+			inCurrentMonth,
 			isToday: isoDate === today,
 			...(holiday ? { holiday } : {}),
 			...(lunarLabel ? { lunarLabel } : {}),

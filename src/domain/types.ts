@@ -230,6 +230,7 @@ export interface WeatherDashboardModuleConfig {
 	locationName: string;
 	latitude: number;
 	longitude: number;
+	forecastDays: number;
 	refreshMinutes: number;
 }
 
@@ -240,11 +241,13 @@ export interface CalendarDashboardModuleConfig {
 
 export interface NoteStatsDashboardModuleConfig {
 	rootPath: string;
+	excludePaths: string[];
 	topFolderLimit: number;
 }
 
 export interface RecentFilesDashboardModuleConfig {
 	rootPath: string;
+	excludePaths: string[];
 	limit: number;
 }
 

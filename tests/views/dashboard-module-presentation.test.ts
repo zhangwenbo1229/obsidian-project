@@ -5,6 +5,7 @@ import { DASHBOARD_MODULE_DEFINITIONS } from '../../src/views/dashboard-modules/
 const registry = readFileSync(new URL('../../src/views/dashboard-modules/registry.ts', import.meta.url), 'utf8');
 const weather = readFileSync(new URL('../../src/views/dashboard-modules/weather-card.ts', import.meta.url), 'utf8');
 const news = readFileSync(new URL('../../src/views/dashboard-modules/news-card.ts', import.meta.url), 'utf8');
+const calendar = readFileSync(new URL('../../src/views/dashboard-modules/calendar-card.ts', import.meta.url), 'utf8');
 const personal = readFileSync(new URL('../../src/views/personal-view.ts', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
 
@@ -37,5 +38,13 @@ describe('dashboard module presentation', () => {
 		expect(personal).toContain('isCurrent');
 		expect(weather).toContain('context.isCurrent()');
 		expect(news).toContain('context.isCurrent()');
+	});
+
+	it('keeps the active calendar month in the heading and allows resized cards to scroll', () => {
+		expect(calendar).toContain('op-dashboard-module-subtitle');
+		expect(calendar).not.toContain('op-module-calendar-caption');
+		expect(css).toMatch(/\.op-calendar-card\s*\{[^}]*overflow:\s*auto/u);
+		expect(css).toMatch(/\.op-module-calendar-grid\s*\{[^}]*min-width:/u);
+		expect(css).toMatch(/\.op-dashboard-module-card\.is-calendar \.op-dashboard-module-subtitle\s*\{[^}]*display:\s*inline/u);
 	});
 });

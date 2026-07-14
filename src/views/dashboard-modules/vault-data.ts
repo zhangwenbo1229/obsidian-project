@@ -35,8 +35,22 @@ export function filterFilesByRoot<T extends DashboardVaultFile>(files: readonly 
 	return files.filter((file) => belongsToRoot(file.path, rootPath));
 }
 
-export function selectRecentFiles<T extends DashboardVaultFile>(files: readonly T[], rootPath: string, limit: number): T[] {
-	return filterFilesByRoot(files, rootPath)
+export function filterFilesByScope<T extends DashboardVaultFile>(
+	files: readonly T[],
+	rootPath: string,
+	excludePaths: readonly string[],
+): T[] {
+	const exclusions = [...new Set(excludePaths.map(normalizeRoot).filter(Boolean))];
+	return files.filter((file) => belongsToRoot(file.path, rootPath) && !exclusions.some((path) => belongsToRoot(file.path, path)));
+}
+
+export function selectRecentFiles<T extends DashboardVaultFile>(
+	files: readonly T[],
+	rootPath: string,
+	limit: number,
+	excludePaths: readonly string[] = [],
+): T[] {
+	return filterFilesByScope(files, rootPath, excludePaths)
 		.sort((left, right) => right.stat.mtime - left.stat.mtime || left.path.localeCompare(right.path, 'zh-CN'))
 		.slice(0, Math.max(0, limit));
 }
@@ -46,8 +60,9 @@ export async function collectNoteStatistics<T extends DashboardVaultFile>(
 	read: (file: T) => Promise<string>,
 	rootPath: string,
 	topFolderLimit: number,
+	excludePaths: readonly string[] = [],
 ): Promise<NoteStatistics> {
-	const selected = filterFilesByRoot(files, rootPath);
+	const selected = filterFilesByScope(files, rootPath, excludePaths);
 	const contents = await Promise.all(selected.map((file) => read(file)));
 	const folders = new Set<string>();
 	const topFolders = new Map<string, number>();

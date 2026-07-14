@@ -7,6 +7,7 @@ describe('dashboard calendar model', () => {
 		expect(model.weekdays).toEqual(['一', '二', '三', '四', '五', '六', '日']);
 		expect(model.cells).toHaveLength(35);
 		expect(model.cells[0]).toMatchObject({ isoDate: '2026-06-29', inCurrentMonth: false });
+		expect(model.cells[0]?.day).toBeNull();
 		expect(model.cells[2]).toMatchObject({ isoDate: '2026-07-01', inCurrentMonth: true });
 		expect(model.cells.find((cell) => cell.isoDate === '2026-07-14')).toMatchObject({ isToday: true });
 	});

@@ -1,5 +1,6 @@
 import type { GlobalConfig, PersonalDashboardCardLayout, ProjectConfig, SavedProjectFilter, TagGroup, TagStyle, TaskConfigurationTemplate } from '../domain/types';
 import { normalizeProjectViewDisplay, type ProjectViewDisplaySettings } from '../views/task-display-settings';
+import { normalizePersonalDashboardSettings, type PersonalDashboardSettings } from '../views/personal-dashboard-settings';
 import { normalizeTaskFieldConfig } from './task-field-configuration';
 
 export interface ConfigurationSnapshot {
@@ -13,6 +14,7 @@ export interface ConfigurationSnapshot {
 	savedProjectFilters?: SavedProjectFilter[];
 	personalDashboardLayout?: PersonalDashboardCardLayout[];
 	projectViewDisplay?: ProjectViewDisplaySettings;
+	personalDashboardSettings?: PersonalDashboardSettings;
 }
 
 export type NormalizedConfigurationSnapshot = ConfigurationSnapshot & {
@@ -23,6 +25,7 @@ export type NormalizedConfigurationSnapshot = ConfigurationSnapshot & {
 	tagGroups: TagGroup[];
 	tagGroupAssignments: Record<string, string>;
 	projectViewDisplay: ProjectViewDisplaySettings;
+	personalDashboardSettings: PersonalDashboardSettings;
 };
 
 export function normalizeConfigurationSnapshot(
@@ -67,6 +70,7 @@ export function normalizeConfigurationSnapshot(
 		taskTemplates,
 		savedProjectFilters: structuredClone(snapshot.savedProjectFilters ?? []),
 		personalDashboardLayout: structuredClone(snapshot.personalDashboardLayout ?? []),
+		personalDashboardSettings: normalizePersonalDashboardSettings(snapshot.personalDashboardSettings),
 		projectViewDisplay: normalizeProjectViewDisplay(snapshot.projectViewDisplay, customFields),
 	};
 }

@@ -23,8 +23,11 @@ describe('personal card workspace', () => {
 		expect(source).toContain('card.title');
 		expect(source).toContain('card.numberColor');
 		expect(source).toContain('card.backgroundColor');
+		expect(source).toContain('--op-dashboard-card-background');
 		expect(source).toContain('op-dashboard-stat-card');
 		expect(modal).toContain('背景颜色');
+		expect(modal).toContain('renderBackgroundSetting');
+		expect(css).toContain('--op-dashboard-card-background');
 		expect(source).not.toContain('op-dashboard-stat-caption');
 		expect(css).toContain('scrollbar-width: none');
 		expect(css).toContain('.op-dashboard-card::-webkit-scrollbar');

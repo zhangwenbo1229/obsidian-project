@@ -15,11 +15,12 @@ describe('personal dashboard module configuration', () => {
 	});
 
 	it('normalizes safe defaults and keeps network modules disabled', () => {
-		expect(normalizeDashboardModuleConfig('weather', null)).toEqual({
+			expect(normalizeDashboardModuleConfig('weather', null)).toEqual({
 			networkEnabled: false,
 			locationName: '上海',
 			latitude: 31.2304,
 			longitude: 121.4737,
+			forecastDays: 3,
 			refreshMinutes: 30,
 		});
 		expect(normalizeDashboardModuleConfig('news', { networkEnabled: true, feedUrls: [' https://example.com/rss ', 'file:///secret', 'not-a-url', ''], pageSize: 99 })).toEqual({
@@ -31,6 +32,13 @@ describe('personal dashboard module configuration', () => {
 		expect(normalizeDashboardModuleConfig('directory', { rootPaths: [' 工作 ', ''], maxDepth: 99 })).toEqual({
 			rootPaths: ['工作'],
 			maxDepth: 8,
+		});
+		expect(normalizeDashboardModuleConfig('note-stats', { rootPath: 'Notes', excludePaths: [' Notes/Archive ', ''] })).toMatchObject({
+			rootPath: 'Notes',
+			excludePaths: ['Notes/Archive'],
+		});
+		expect(normalizeDashboardModuleConfig('recent-files', { excludePaths: ['Templates'] })).toMatchObject({
+			excludePaths: ['Templates'],
 		});
 	});
 
@@ -45,7 +53,8 @@ describe('personal dashboard module configuration', () => {
 			moduleConfig: { networkEnabled: true, latitude: 200, longitude: -500, refreshMinutes: 1 },
 		}] as never[]);
 		expect(normalized.find((card) => card.id === 'weather-card')?.moduleConfig).toMatchObject({
-			networkEnabled: true, latitude: 90, longitude: -180, refreshMinutes: 10,
+			networkEnabled: true, latitude: 90, longitude: -180, forecastDays: 3, refreshMinutes: 10,
 		});
+		expect(normalizeDashboardModuleConfig('weather', { forecastDays: 99 })).toMatchObject({ forecastDays: 7 });
 	});
 });

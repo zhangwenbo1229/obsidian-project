@@ -45,13 +45,13 @@ export function mapWeatherCode(code: number): WeatherCondition {
 	return CONDITIONS.find((item) => item.codes.includes(code))?.condition ?? { label: '未知', icon: 'cloud' };
 }
 
-export function buildOpenMeteoUrl(latitude: number, longitude: number): string {
+export function buildOpenMeteoUrl(latitude: number, longitude: number, forecastDays = 3): string {
 	const url = new URL('https://api.open-meteo.com/v1/forecast');
 	url.searchParams.set('latitude', String(latitude));
 	url.searchParams.set('longitude', String(longitude));
 	url.searchParams.set('current', 'temperature_2m,apparent_temperature,weather_code,wind_speed_10m');
 	url.searchParams.set('daily', 'weather_code,temperature_2m_max,temperature_2m_min');
-	url.searchParams.set('forecast_days', '3');
+	url.searchParams.set('forecast_days', String(Math.min(7, Math.max(1, Math.round(forecastDays)))));
 	url.searchParams.set('timezone', 'auto');
 	return url.toString();
 }
@@ -66,7 +66,7 @@ function arrayValue(value: unknown, name: string): unknown[] {
 	return value;
 }
 
-export function normalizeWeatherResponse(value: unknown): WeatherSnapshot {
+export function normalizeWeatherResponse(value: unknown, forecastDays = 3): WeatherSnapshot {
 	const response = value && typeof value === 'object' ? value as OpenMeteoResponse : {};
 	const current = response.current ?? {};
 	const daily = response.daily ?? {};
@@ -84,7 +84,7 @@ export function normalizeWeatherResponse(value: unknown): WeatherSnapshot {
 			weatherCode,
 			...condition,
 		},
-		forecast: dates.slice(0, 3).map((date, index) => {
+		forecast: dates.slice(0, Math.min(7, Math.max(1, Math.round(forecastDays)))).map((date, index) => {
 			if (typeof date !== 'string') throw new Error('天气日期格式无效');
 			const code = numberValue(codes[index], 'daily.weather_code');
 			return {
@@ -111,12 +111,13 @@ export class WeatherService {
 		longitude: number,
 		refreshMinutes: number,
 		force = false,
+		forecastDays = 3,
 	): Promise<WeatherSnapshot> {
-		const key = `${latitude},${longitude}`;
+		const key = `${latitude},${longitude},${forecastDays}`;
 		const cached = this.cache.get(key);
 		const ttl = Math.max(1, refreshMinutes) * 60_000;
 		if (!force && cached && this.now() - cached.loadedAt < ttl) return cached.data;
-		const data = normalizeWeatherResponse(await this.request(buildOpenMeteoUrl(latitude, longitude)));
+		const data = normalizeWeatherResponse(await this.request(buildOpenMeteoUrl(latitude, longitude, forecastDays)), forecastDays);
 		this.cache.set(key, { loadedAt: this.now(), data });
 		return data;
 	}

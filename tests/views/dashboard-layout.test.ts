@@ -37,19 +37,34 @@ describe('personal dashboard layout', () => {
 		expect(normalizeDashboardLayout(customized)[0]).toMatchObject({ title: '本周重点', numberColor: '#d14343' });
 	});
 
-	it('provides semantic default backgrounds for number and percentage cards', () => {
+	it('provides semantic default backgrounds for every card kind', () => {
 		expect(defaultDashboardCardBackground('completed')).toBe('#22a06b');
 		expect(defaultDashboardCardBackground('overdue')).toBe('#c9372c');
 		const layout = normalizeDashboardLayout([]);
 		expect(layout.find((card) => card.id === 'completed')?.backgroundColor).toBe('#22a06b');
 		expect(layout.find((card) => card.id === 'completion-rate')?.backgroundColor).toBe('#0c66e4');
-		expect(layout.find((card) => card.id === 'pending-list')?.backgroundColor).toBeUndefined();
+		expect(layout.find((card) => card.id === 'pending-list')?.backgroundColor).toBe('#0c66e4');
 		const customized = updateDashboardCardPresentation(layout, 'completed', {
 			title: '今日完成', numberColor: '#164b35', backgroundColor: '#8ee2bd',
 		});
 		expect(customized.find((card) => card.id === 'completed')).toMatchObject({
 			numberColor: '#164b35', backgroundColor: '#8ee2bd',
 		});
+	});
+
+	it('preserves independently configured backgrounds for task and module cards', () => {
+		const normalized = normalizeDashboardLayout([
+			{
+				id: 'custom-list', order: 7, columnSpan: 2, rowSpan: 2, filterId: null,
+				kind: 'task-list', metric: 'total', displayFields: ['title'], backgroundColor: '#123456',
+			},
+			{
+				id: 'custom-calendar', order: 8, columnSpan: 2, rowSpan: 3, filterId: null,
+				kind: 'calendar', metric: 'total', displayFields: [], backgroundColor: '#654321',
+			},
+		] as never[]);
+		expect(normalized.find((card) => card.id === 'custom-list')?.backgroundColor).toBe('#123456');
+		expect(normalized.find((card) => card.id === 'custom-calendar')?.backgroundColor).toBe('#654321');
 	});
 
 	it('calculates a clamped grid-span preview without resizing the live card box', () => {

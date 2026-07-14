@@ -18,11 +18,11 @@ const response = {
 
 describe('dashboard weather service', () => {
 	it('builds a three-day Open-Meteo request without leaking vault data', () => {
-		const url = new URL(buildOpenMeteoUrl(31.2304, 121.4737));
+		const url = new URL(buildOpenMeteoUrl(31.2304, 121.4737, 6));
 		expect(url.origin).toBe('https://api.open-meteo.com');
 		expect(url.searchParams.get('latitude')).toBe('31.2304');
 		expect(url.searchParams.get('longitude')).toBe('121.4737');
-		expect(url.searchParams.get('forecast_days')).toBe('3');
+		expect(url.searchParams.get('forecast_days')).toBe('6');
 		expect(url.searchParams.get('timezone')).toBe('auto');
 	});
 
@@ -48,5 +48,11 @@ describe('dashboard weather service', () => {
 		await service.load(31.2304, 121.4737, 30, true);
 		expect(request).toHaveBeenCalledTimes(2);
 		expect(mapWeatherCode(999)).toEqual({ label: '未知', icon: 'cloud' });
+	});
+
+	it('limits normalized forecasts to the configured day count', async () => {
+		const service = new WeatherService(() => Promise.resolve(response));
+		const result = await service.load(31.2304, 121.4737, 30, false, 2);
+		expect(result.forecast).toHaveLength(2);
 	});
 });

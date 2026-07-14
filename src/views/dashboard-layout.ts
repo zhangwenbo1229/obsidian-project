@@ -33,8 +33,18 @@ const DEFAULT_CARD_BACKGROUNDS: Record<DashboardMetric, string> = {
 	'overdue-rate': '#c9372c',
 };
 
-export function defaultDashboardCardBackground(metric: DashboardMetric): string {
-	return DEFAULT_CARD_BACKGROUNDS[metric];
+const DEFAULT_KIND_BACKGROUNDS: Partial<Record<DashboardCardKind, string>> = {
+	'task-list': '#0c66e4',
+	weather: '#2f9eeb',
+	calendar: '#6554c0',
+	'note-stats': '#22a06b',
+	'recent-files': '#6b778c',
+	news: '#c25100',
+	directory: '#8f7ee7',
+};
+
+export function defaultDashboardCardBackground(metric: DashboardMetric, kind: DashboardCardKind = 'number'): string {
+	return DEFAULT_KIND_BACKGROUNDS[kind] ?? DEFAULT_CARD_BACKGROUNDS[metric];
 }
 
 function normalizeCard(
@@ -56,9 +66,7 @@ function normalizeCard(
 		taskListDirection: card.taskListDirection === 'vertical' ? 'vertical' : 'horizontal',
 		title: card.title?.trim() || undefined,
 		numberColor: card.numberColor?.trim() || undefined,
-		backgroundColor: kind === 'number' || kind === 'percentage'
-			? card.backgroundColor?.trim() || defaultDashboardCardBackground(metric)
-			: undefined,
+		backgroundColor: card.backgroundColor?.trim() || defaultDashboardCardBackground(metric, kind),
 		moduleConfig: isDashboardModuleKind(kind) ? normalizeDashboardModuleConfig(kind, card.moduleConfig) : undefined,
 	};
 }

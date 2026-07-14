@@ -5,6 +5,7 @@ import { ProjectSettingsEditor } from './project-editor';
 import { SETTINGS_PAGES, SettingsNavigation, type SettingsRootPage } from './settings-navigation';
 import { TemplateSettingsEditor } from './template-editor';
 import { ViewDisplaySettingsEditor } from './view-display-editor';
+import { PersonalDashboardSettingsEditor } from './personal-dashboard-settings-editor';
 
 const PAGE_LABELS: Record<SettingsRootPage, string> = {
 	general: '常规',
@@ -179,7 +180,9 @@ export class ObsidianProjectSettingTab extends PluginSettingTab {
 	}
 
 	private renderViewDisplay(container: HTMLElement): void {
-		this.renderPageHeading(container, '视图显示', '分别控制项目四种视图模式中的任务字段。');
+		this.renderPageHeading(container, '视图显示', '控制个人视图可新增卡片类型，以及项目四种视图模式中的任务字段。');
+		const personalSection = container.createDiv({ cls: 'op-settings-section op-personal-dashboard-settings' });
+		new PersonalDashboardSettingsEditor(this.plugin.manager).mount(personalSection);
 		const section = container.createDiv({ cls: 'op-settings-section op-view-display-settings' });
 		new ViewDisplaySettingsEditor(this.plugin.manager).mount(section);
 	}
