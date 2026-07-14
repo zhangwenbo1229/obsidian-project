@@ -8,7 +8,7 @@ import {
 describe('personal dashboard module registry', () => {
 	it('registers render and settings handlers for every module kind', () => {
 		expect(DASHBOARD_MODULE_DEFINITIONS.map((item) => item.kind)).toEqual([
-			'weather', 'calendar', 'note-stats', 'recent-files', 'news', 'directory',
+			'weather', 'calendar', 'note-stats', 'recent-files', 'news', 'directory', 'text', 'chart',
 		]);
 		for (const definition of DASHBOARD_MODULE_DEFINITIONS) {
 			expect(typeof definition.render).toBe('function');

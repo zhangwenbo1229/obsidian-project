@@ -1,5 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { buildOpenMeteoUrl, mapWeatherCode, WeatherService } from '../../src/views/dashboard-modules/weather-service';
+import {
+	buildOpenMeteoUrl,
+	buildOpenWeatherMapUrls,
+	buildQWeatherUrls,
+	mapWeatherCode,
+	normalizeOpenWeatherMapResponses,
+	normalizeQWeatherResponses,
+	WeatherService,
+} from '../../src/views/dashboard-modules/weather-service';
 
 const response = {
 	current: {
@@ -54,5 +62,71 @@ describe('dashboard weather service', () => {
 		const service = new WeatherService(() => Promise.resolve(response));
 		const result = await service.load(31.2304, 121.4737, 30, false, 2);
 		expect(result.forecast).toHaveLength(2);
+	});
+
+	it('builds QWeather requests against the configured API host', () => {
+		const urls = buildQWeatherUrls('https://abc.re.qweatherapi.com/', 31.2, 121.4, 'key value');
+		expect(urls.current).toBe('https://abc.re.qweatherapi.com/v7/weather/now?location=121.4%2C31.2&key=key+value');
+		expect(urls.forecast).toContain('/v7/weather/7d?');
+	});
+
+	it('normalizes QWeather current and daily responses', () => {
+		const snapshot = normalizeQWeatherResponses({
+			code: '200', now: { temp: '29', feelsLike: '31', windSpeed: '12', icon: '101', text: '多云' },
+		}, {
+			code: '200', daily: [
+				{ fxDate: '2026-07-14', tempMin: '24', tempMax: '32', iconDay: '101', textDay: '多云' },
+				{ fxDate: '2026-07-15', tempMin: '25', tempMax: '33', iconDay: '305', textDay: '小雨' },
+			],
+		}, 2);
+		expect(snapshot.current).toMatchObject({ temperature: 29, apparentTemperature: 31, label: '多云' });
+		expect(snapshot.forecast).toHaveLength(2);
+		expect(snapshot.forecast[1]).toMatchObject({ date: '2026-07-15', minimum: 25, maximum: 33, label: '小雨' });
+	});
+
+	it('builds and normalizes OpenWeatherMap current and grouped forecast responses', () => {
+		const urls = buildOpenWeatherMapUrls(31.2, 121.4, 'key value');
+		expect(urls.current).toContain('api.openweathermap.org/data/2.5/weather');
+		expect(urls.current).toContain('units=metric');
+		const snapshot = normalizeOpenWeatherMapResponses({
+			main: { temp: 28, feels_like: 30 }, wind: { speed: 3 }, weather: [{ id: 800, description: '晴' }],
+		}, {
+			list: [
+				{ dt_txt: '2026-07-14 03:00:00', main: { temp_min: 24, temp_max: 30 }, weather: [{ id: 801, description: '少云' }] },
+				{ dt_txt: '2026-07-14 12:00:00', main: { temp_min: 26, temp_max: 34 }, weather: [{ id: 800, description: '晴' }] },
+				{ dt_txt: '2026-07-15 12:00:00', main: { temp_min: 25, temp_max: 32 }, weather: [{ id: 500, description: '小雨' }] },
+			],
+		}, 2);
+		expect(snapshot.current).toMatchObject({ temperature: 28, windSpeed: 10.8, label: '晴' });
+		expect(snapshot.forecast).toEqual([
+			expect.objectContaining({ date: '2026-07-14', minimum: 24, maximum: 34 }),
+			expect.objectContaining({ date: '2026-07-15', minimum: 25, maximum: 32 }),
+		]);
+	});
+
+	it('requires API keys before requesting authenticated providers', async () => {
+		const request = vi.fn(() => Promise.resolve({}));
+		const service = new WeatherService(request);
+		await expect(service.loadProvider({
+			provider: 'qweather', latitude: 31, longitude: 121, forecastDays: 3,
+			refreshMinutes: 30, apiKey: '', apiHost: '',
+		})).rejects.toThrow('API Key');
+		expect(request).not.toHaveBeenCalled();
+	});
+
+	it('rejects non-https QWeather hosts', () => {
+		expect(() => buildQWeatherUrls('http://example.com', 31, 121, 'key')).toThrow('HTTPS');
+		expect(() => buildQWeatherUrls('file:///secret', 31, 121, 'key')).toThrow('HTTPS');
+	});
+
+	it('redacts API keys from provider request errors', async () => {
+		const service = new WeatherService((url) => Promise.reject(new Error(`request failed: ${url}`)));
+		const error = await service.loadProvider({
+			provider: 'openweathermap', latitude: 31, longitude: 121, forecastDays: 3,
+			refreshMinutes: 30, apiKey: 'private-secret', apiHost: '',
+		}).catch((reason: unknown) => reason);
+		expect(error).toBeInstanceOf(Error);
+		expect((error as Error).message).not.toContain('private-secret');
+		expect((error as Error).message).toContain('天气数据源请求失败');
 	});
 });

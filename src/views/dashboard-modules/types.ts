@@ -1,3 +1,4 @@
+import type { Component } from 'obsidian';
 import type { DashboardModuleConfig, DashboardModuleKind, PersonalDashboardCardLayout } from '../../domain/types';
 import type { ProjectManager } from '../../services/project-manager';
 
@@ -6,6 +7,7 @@ export interface DashboardModuleRenderContext {
 	heading: HTMLElement;
 	card: PersonalDashboardCardLayout;
 	manager: ProjectManager;
+	component: Component;
 	refresh: () => void;
 	isCurrent: () => boolean;
 }
@@ -13,6 +15,8 @@ export interface DashboardModuleRenderContext {
 export interface DashboardModuleSettingsContext {
 	container: HTMLElement;
 	config: DashboardModuleConfig;
+	manager: ProjectManager;
+	component: Component;
 	update: (config: DashboardModuleConfig) => void;
 }
 

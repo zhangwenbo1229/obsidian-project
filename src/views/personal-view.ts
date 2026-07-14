@@ -132,6 +132,7 @@ export class PersonalView extends ItemView {
 				heading,
 				card,
 				manager: this.manager,
+				component: this,
 				refresh: () => this.render(),
 				isCurrent: () => this.renderGeneration === generation && cardEl.isConnected,
 			})).catch((error: unknown) => {

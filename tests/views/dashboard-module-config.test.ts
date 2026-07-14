@@ -8,7 +8,7 @@ import {
 describe('personal dashboard module configuration', () => {
 	it('catalogs all six modules with practical default card sizes', () => {
 		expect(DASHBOARD_MODULE_CATALOG.map((item) => item.kind)).toEqual([
-			'weather', 'calendar', 'note-stats', 'recent-files', 'news', 'directory',
+			'weather', 'calendar', 'note-stats', 'recent-files', 'news', 'directory', 'text', 'chart',
 		]);
 		expect(DASHBOARD_MODULE_CATALOG.find((item) => item.kind === 'calendar')?.defaultSize).toEqual({ columns: 2, rows: 3 });
 		expect(DASHBOARD_MODULE_CATALOG.find((item) => item.kind === 'weather')?.icon).toBe('cloud-sun');
@@ -17,6 +17,9 @@ describe('personal dashboard module configuration', () => {
 	it('normalizes safe defaults and keeps network modules disabled', () => {
 			expect(normalizeDashboardModuleConfig('weather', null)).toEqual({
 			networkEnabled: false,
+			provider: 'open-meteo',
+			apiKey: '',
+			apiHost: '',
 			locationName: '上海',
 			latitude: 31.2304,
 			longitude: 121.4737,
@@ -56,5 +59,12 @@ describe('personal dashboard module configuration', () => {
 			networkEnabled: true, latitude: 90, longitude: -180, forecastDays: 3, refreshMinutes: 10,
 		});
 		expect(normalizeDashboardModuleConfig('weather', { forecastDays: 99 })).toMatchObject({ forecastDays: 7 });
+		expect(normalizeDashboardModuleConfig('weather', {
+			provider: 'qweather', apiKey: ' secret ', apiHost: ' https://abc.re.qweatherapi.com/ ',
+		})).toMatchObject({
+			provider: 'qweather', apiKey: 'secret', apiHost: 'https://abc.re.qweatherapi.com',
+		});
+		expect(normalizeDashboardModuleConfig('weather', { provider: 'invalid' })).toMatchObject({ provider: 'open-meteo' });
+		expect(normalizeDashboardModuleConfig('weather', { provider: 'qweather', apiHost: 'file:///secret' })).toMatchObject({ apiHost: '' });
 	});
 });

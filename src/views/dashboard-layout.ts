@@ -41,6 +41,8 @@ const DEFAULT_KIND_BACKGROUNDS: Partial<Record<DashboardCardKind, string>> = {
 	'recent-files': '#6b778c',
 	news: '#c25100',
 	directory: '#8f7ee7',
+	text: '#0c66e4',
+	chart: '#6554c0',
 };
 
 export function defaultDashboardCardBackground(metric: DashboardMetric, kind: DashboardCardKind = 'number'): string {

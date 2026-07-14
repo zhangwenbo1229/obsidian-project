@@ -7,7 +7,11 @@ import type {
 	NoteStatsDashboardModuleConfig,
 	RecentFilesDashboardModuleConfig,
 	WeatherDashboardModuleConfig,
+	TextDashboardModuleConfig,
+	ChartDashboardModuleConfig,
 } from '../../domain/types';
+
+const WEATHER_PROVIDERS = new Set(['open-meteo', 'qweather', 'openweathermap']);
 
 export const DASHBOARD_MODULE_CATALOG: Array<{
 	kind: DashboardModuleKind;
@@ -21,6 +25,8 @@ export const DASHBOARD_MODULE_CATALOG: Array<{
 	{ kind: 'recent-files', label: '最近文件', icon: 'history', defaultSize: { columns: 2, rows: 3 } },
 	{ kind: 'news', label: '资讯', icon: 'newspaper', defaultSize: { columns: 2, rows: 3 } },
 	{ kind: 'directory', label: '目录', icon: 'folder-tree', defaultSize: { columns: 2, rows: 3 } },
+	{ kind: 'text', label: '文本', icon: 'notebook-pen', defaultSize: { columns: 2, rows: 2 } },
+	{ kind: 'chart', label: '图表', icon: 'chart-column', defaultSize: { columns: 2, rows: 3 } },
 ];
 
 export function isDashboardModuleKind(value: string): value is DashboardModuleKind {
@@ -59,10 +65,25 @@ function normalizedFeedUrls(value: unknown): string[] {
 	});
 }
 
+function normalizedHttpsOrigin(value: unknown): string {
+	if (typeof value !== 'string' || !value.trim()) return '';
+	try {
+		const url = new URL(value.trim());
+		return url.protocol === 'https:' ? url.origin : '';
+	} catch {
+		return '';
+	}
+}
+
 export function normalizeDashboardModuleConfig(kind: DashboardModuleKind, value: unknown): DashboardModuleConfig {
 	const source = objectValue(value);
 	if (kind === 'weather') return {
 		networkEnabled: source.networkEnabled === true,
+		provider: typeof source.provider === 'string' && WEATHER_PROVIDERS.has(source.provider)
+			? source.provider as WeatherDashboardModuleConfig['provider']
+			: 'open-meteo',
+		apiKey: typeof source.apiKey === 'string' ? source.apiKey.trim() : '',
+		apiHost: normalizedHttpsOrigin(source.apiHost),
 		locationName: typeof source.locationName === 'string' && source.locationName.trim() ? source.locationName.trim() : '上海',
 		latitude: boundedNumber(source.latitude, 31.2304, -90, 90),
 		longitude: boundedNumber(source.longitude, 121.4737, -180, 180),
@@ -89,8 +110,17 @@ export function normalizeDashboardModuleConfig(kind: DashboardModuleKind, value:
 		pageSize: boundedNumber(source.pageSize, 5, 3, 12),
 		refreshMinutes: boundedNumber(source.refreshMinutes, 30, 10, 360),
 	} satisfies NewsDashboardModuleConfig;
-	return {
+	if (kind === 'directory') return {
 		rootPaths: normalizedPaths(source.rootPaths),
 		maxDepth: boundedNumber(source.maxDepth, 4, 1, 8),
 	} satisfies DirectoryDashboardModuleConfig;
+	if (kind === 'text') return {
+		markdown: typeof source.markdown === 'string' ? source.markdown : '## 文本卡片\n\n在设置中输入 Markdown 内容。',
+	} satisfies TextDashboardModuleConfig;
+	return {
+		chartType: source.chartType === 'bar' || source.chartType === 'pie' ? source.chartType : 'line',
+		csv: typeof source.csv === 'string' && source.csv.trim()
+			? source.csv.trim()
+			: '分类,计划,实际\n一月,10,8\n二月,12,11\n三月,9,13',
+	} satisfies ChartDashboardModuleConfig;
 }

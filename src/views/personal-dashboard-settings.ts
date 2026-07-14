@@ -14,6 +14,8 @@ export const ALL_DASHBOARD_CARD_KINDS: DashboardCardKind[] = [
 	'recent-files',
 	'news',
 	'directory',
+	'text',
+	'chart',
 ];
 
 export function normalizePersonalDashboardSettings(value?: unknown): PersonalDashboardSettings {

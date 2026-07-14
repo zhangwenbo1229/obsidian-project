@@ -17,6 +17,8 @@ const CARD_KIND_LABELS: Record<DashboardCardKind, string> = {
 	'recent-files': '最近文件卡片',
 	news: '资讯卡片',
 	directory: '目录卡片',
+	text: '文本卡片',
+	chart: '图表卡片',
 };
 
 export class PersonalDashboardSettingsEditor {

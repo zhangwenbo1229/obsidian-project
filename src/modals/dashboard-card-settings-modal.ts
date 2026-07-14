@@ -1,4 +1,4 @@
-import { Modal, Notice, Setting } from 'obsidian';
+import { Component, Modal, Notice, Setting } from 'obsidian';
 import type {
 	DashboardCardKind,
 	DashboardMetric,
@@ -32,6 +32,7 @@ const METRIC_LABELS: Record<DashboardMetric, string> = {
 };
 
 export class DashboardCardSettingsModal extends Modal {
+	private readonly previewComponent = new Component();
 	private title: string;
 	private numberColor: string;
 	private backgroundColor: string;
@@ -63,8 +64,13 @@ export class DashboardCardSettingsModal extends Modal {
 	}
 
 	onOpen(): void {
+		this.previewComponent.load();
 		this.setTitle('卡片设置');
 		this.renderContent();
+	}
+
+	onClose(): void {
+		this.previewComponent.unload();
 	}
 
 	private renderContent(): void {
@@ -94,6 +100,8 @@ export class DashboardCardSettingsModal extends Modal {
 			definition.renderSettings({
 				container: this.contentEl,
 				config: this.moduleConfig,
+				manager: this.manager,
+				component: this.previewComponent,
 				update: (config) => (this.moduleConfig = config),
 			});
 			this.renderActions();

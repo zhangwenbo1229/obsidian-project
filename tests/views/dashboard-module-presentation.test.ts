@@ -11,10 +11,10 @@ const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
 
 describe('dashboard module presentation', () => {
 	it('uses dedicated renderers for all six custom module cards', () => {
-		for (const name of ['weatherDefinition', 'calendarDefinition', 'noteStatsDefinition', 'recentFilesDefinition', 'newsDefinition', 'directoryDefinition']) {
+		for (const name of ['weatherDefinition', 'calendarDefinition', 'noteStatsDefinition', 'recentFilesDefinition', 'newsDefinition', 'directoryDefinition', 'textDefinition', 'chartDefinition']) {
 			expect(registry).toContain(name);
 		}
-		expect(DASHBOARD_MODULE_DEFINITIONS).toHaveLength(6);
+		expect(DASHBOARD_MODULE_DEFINITIONS).toHaveLength(8);
 	});
 
 	it('keeps weather and news disabled until the user opts in', () => {

@@ -198,7 +198,7 @@ export type CustomTaskDisplayField = `custom:${string}`;
 export type TaskDisplayField = BuiltInTaskDisplayField | CustomTaskDisplayField | 'customFields';
 
 export type PersonalDashboardCardId = string;
-export type DashboardModuleKind = 'weather' | 'calendar' | 'note-stats' | 'recent-files' | 'news' | 'directory';
+export type DashboardModuleKind = 'weather' | 'calendar' | 'note-stats' | 'recent-files' | 'news' | 'directory' | 'text' | 'chart';
 export type DashboardCardKind = 'number' | 'percentage' | 'task-list' | DashboardModuleKind;
 export type DashboardMetric =
 	| 'total'
@@ -227,12 +227,17 @@ export interface PersonalDashboardCardLayout {
 
 export interface WeatherDashboardModuleConfig {
 	networkEnabled: boolean;
+	provider: WeatherProviderId;
+	apiKey: string;
+	apiHost: string;
 	locationName: string;
 	latitude: number;
 	longitude: number;
 	forecastDays: number;
 	refreshMinutes: number;
 }
+
+export type WeatherProviderId = 'open-meteo' | 'qweather' | 'openweathermap';
 
 export interface CalendarDashboardModuleConfig {
 	showLunar: boolean;
@@ -263,13 +268,26 @@ export interface DirectoryDashboardModuleConfig {
 	maxDepth: number;
 }
 
+export interface TextDashboardModuleConfig {
+	markdown: string;
+}
+
+export type DashboardChartType = 'line' | 'bar' | 'pie';
+
+export interface ChartDashboardModuleConfig {
+	chartType: DashboardChartType;
+	csv: string;
+}
+
 export type DashboardModuleConfig =
 	| WeatherDashboardModuleConfig
 	| CalendarDashboardModuleConfig
 	| NoteStatsDashboardModuleConfig
 	| RecentFilesDashboardModuleConfig
 	| NewsDashboardModuleConfig
-	| DirectoryDashboardModuleConfig;
+	| DirectoryDashboardModuleConfig
+	| TextDashboardModuleConfig
+	| ChartDashboardModuleConfig;
 
 export interface TaskMetadata {
 	kind: 'task';
