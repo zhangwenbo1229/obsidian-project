@@ -3,6 +3,7 @@ import type { DashboardCardKind } from '../domain/types';
 export interface PersonalDashboardSettings {
 	enabledCardKinds: DashboardCardKind[];
 	weatherCredentials: PersonalDashboardWeatherCredentials;
+	fileOpenCounts: Record<string, number>;
 }
 
 export interface PersonalDashboardWeatherCredentials {
@@ -45,6 +46,9 @@ export function normalizePersonalDashboardSettings(value?: unknown): PersonalDas
 		? source.weatherCredentials as Record<string, unknown>
 		: {};
 	const supported = new Set<DashboardCardKind>(ALL_DASHBOARD_CARD_KINDS);
+	const counts = source.fileOpenCounts && typeof source.fileOpenCounts === 'object'
+		? source.fileOpenCounts as Record<string, unknown>
+		: {};
 	return {
 		enabledCardKinds: Array.isArray(source.enabledCardKinds)
 			? [...new Set(source.enabledCardKinds.filter((kind): kind is DashboardCardKind =>
@@ -58,5 +62,10 @@ export function normalizePersonalDashboardSettings(value?: unknown): PersonalDas
 				? weather.openWeatherMapApiKey.trim()
 				: '',
 		},
+		fileOpenCounts: Object.fromEntries(Object.entries(counts).flatMap(([path, count]) => {
+			const normalizedPath = path.trim();
+			if (!normalizedPath || typeof count !== 'number' || !Number.isFinite(count) || count <= 0) return [];
+			return [[normalizedPath, Math.min(1_000_000, Math.floor(count))]];
+		})),
 	};
 }

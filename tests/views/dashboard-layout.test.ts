@@ -118,4 +118,40 @@ describe('personal dashboard layout', () => {
 		const normalized = normalizeDashboardLayout(legacy as never[], [{ key: 'review-at', name: '评审时间' }] as never[]);
 		expect(normalized.find((card) => card.id === 'custom-list')?.displayFields).toEqual(['key', 'custom:review-at', 'title']);
 	});
+
+	it('normalizes manual percentage progress values and zero targets', () => {
+		const normalized = normalizeDashboardLayout([{
+			id: 'manual-progress', order: 7, columnSpan: 2, rowSpan: 2, filterId: null,
+			kind: 'percentage', metric: 'completion-rate', displayFields: [],
+			percentageDataMode: 'manual', percentageCurrent: 35, percentageTarget: 50,
+			percentageDisplay: 'progress',
+		}] as never[]).find((card) => card.id === 'manual-progress');
+		expect(normalized).toMatchObject({
+			percentageDataMode: 'manual', percentageCurrent: 35, percentageTarget: 50, percentageDisplay: 'progress',
+		});
+		const zero = normalizeDashboardLayout([{
+			id: 'zero', kind: 'percentage', percentageTarget: 0,
+		}] as never[]).find((card) => card.id === 'zero');
+		expect(zero?.percentageTarget).toBe(100);
+	});
+
+	it('duplicates any card with deep-copied configuration after its source', () => {
+		const source = normalizeDashboardLayout([{
+			id: 'calendar-copy-source', order: 7, columnSpan: 2, rowSpan: 3, filterId: null,
+			kind: 'calendar', metric: 'total', displayFields: [], title: '项目日历',
+			moduleConfig: { showLunar: true, showHolidays: true, weekStartsOn: 1 },
+		}] as never[]);
+		const duplicate = (dashboardLayout as Record<string, unknown>).duplicateDashboardCard as
+			| undefined
+			| ((layout: typeof source, sourceId: string, newId: string) => typeof source);
+		expect(typeof duplicate).toBe('function');
+		if (!duplicate) return;
+		const result = duplicate(source, 'calendar-copy-source', 'calendar-copy');
+		const originalIndex = result.findIndex((card) => card.id === 'calendar-copy-source');
+		const copied = result[originalIndex + 1];
+		expect(copied).toMatchObject({ id: 'calendar-copy', title: '项目日历 副本', kind: 'calendar' });
+		expect(copied?.moduleConfig).not.toBe(result[originalIndex]?.moduleConfig);
+		const builtInCopy = duplicate(source, 'completion-rate', 'completion-rate-copy');
+		expect(builtInCopy.find((card) => card.id === 'completion-rate-copy')?.title).toBe('完成率 副本');
+	});
 });

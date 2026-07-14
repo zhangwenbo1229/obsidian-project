@@ -38,3 +38,13 @@ export function collectIncompleteTodos(
 		.flatMap((file) => extractIncompleteTodos(file.content, file.path))
 		.slice(0, Math.max(0, limit));
 }
+
+export function setMarkdownTodoCompleted(markdown: string, lineNumber: number, completed: boolean): string {
+	const lines = markdown.match(/.*(?:\r\n|\n|\r|$)/gu)?.filter((line) => line.length > 0) ?? [];
+	const index = lineNumber - 1;
+	if (index < 0 || index >= lines.length) throw new Error('待办所在行不存在，笔记可能已被修改。');
+	const line = lines[index]!;
+	if (!/^\s*[-*+]\s+\[[ xX]\]/u.test(line)) throw new Error('待办所在行不再是 Markdown 任务。');
+	lines[index] = line.replace(/^(\s*[-*+]\s+)\[[ xX]\]/u, `$1[${completed ? 'x' : ' '}]`);
+	return lines.join('');
+}

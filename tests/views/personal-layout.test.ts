@@ -68,4 +68,16 @@ describe('personal card workspace', () => {
 		expect(css).toMatch(/\.op-task-card-list\.is-vertical\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/u);
 		expect(css).toMatch(/\.op-task-card-list\.is-horizontal\s*\{[^}]*repeat\(auto-fit/u);
 	});
+
+	it('renders manual percentage cards as progress and lets every card be copied', () => {
+		const modal = readFileSync(new URL('../../src/modals/dashboard-card-settings-modal.ts', import.meta.url), 'utf8');
+		expect(modal).toContain('percentageDataMode');
+		expect(modal).toContain('手工输入');
+		expect(source).toContain('op-dashboard-progress');
+		expect(source).toContain('clampedPercentage');
+		expect(source).toContain('progressValue.style.color');
+		expect(source).toContain("setTitle('复制卡片')");
+		expect(source).toContain('duplicateDashboardCard');
+		expect(css).toContain('.op-dashboard-progress-track');
+	});
 });

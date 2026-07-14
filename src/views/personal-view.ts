@@ -13,6 +13,7 @@ import {
 	calculateDashboardResizePreview,
 	createDashboardCard,
 	deleteDashboardCard,
+	duplicateDashboardCard,
 	defaultDashboardCardBackground,
 	reorderDashboardCards,
 	resizeDashboardCard,
@@ -161,8 +162,28 @@ export class PersonalView extends ItemView {
 			'completion-rate': stats.completionRate,
 			'overdue-rate': stats.incomplete === 0 ? 0 : stats.overdue / stats.incomplete,
 		};
-		const rawValue = values[card.metric];
+		const rawValue = card.kind === 'percentage' && card.percentageDataMode === 'manual'
+			? card.percentageCurrent! / card.percentageTarget!
+			: values[card.metric];
 		const text = card.kind === 'percentage' ? `${Math.round(rawValue * 100)}%` : String(rawValue);
+		if (card.kind === 'percentage' && card.percentageDisplay === 'progress') {
+			const clampedPercentage = Math.min(100, Math.max(0, Math.round(rawValue * 100)));
+			const progress = cardEl.createDiv({ cls: 'op-dashboard-progress' });
+			const progressValue = progress.createDiv({ cls: 'op-dashboard-progress-value', text });
+			if (card.numberColor) progressValue.style.color = card.numberColor;
+			const track = progress.createDiv({
+				cls: 'op-dashboard-progress-track',
+				attr: {
+					role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100',
+					'aria-valuenow': String(clampedPercentage),
+				},
+			});
+			track.createSpan({
+				cls: 'op-dashboard-progress-fill',
+				attr: { style: `--op-progress: ${clampedPercentage / 100}` },
+			});
+			return;
+		}
 		const body = cardEl.createDiv({ cls: 'op-dashboard-stat-body' });
 		const icon = body.createSpan({ cls: 'op-dashboard-stat-icon', attr: { 'aria-hidden': 'true' } });
 		setIcon(icon, STAT_ICONS[card.metric]);
@@ -215,6 +236,13 @@ export class PersonalView extends ItemView {
 		const menu = new Menu();
 		menu.addItem((item) => item.setTitle('卡片设置').setIcon('settings-2').onClick(() => {
 			new DashboardCardSettingsModal(this.manager, card, CARD_LABELS[card.id] ?? '自定义卡片', () => this.render()).open();
+		}));
+		menu.addItem((item) => item.setTitle('复制卡片').setIcon('copy').onClick(() => {
+			void this.manager.savePersonalDashboardLayout(duplicateDashboardCard(
+				this.manager.personalDashboardLayout,
+				card.id,
+				createUuid(),
+			)).then(() => this.render());
 		}));
 		if (!BUILT_IN_DASHBOARD_CARD_IDS.has(card.id)) {
 			menu.addItem((item) => item.setTitle('删除卡片').setIcon('trash-2').onClick(() => {

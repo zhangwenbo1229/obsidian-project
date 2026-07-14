@@ -21,6 +21,17 @@ const DEFAULTS: Array<[PersonalDashboardCardId, number, number, DashboardCardKin
 	['pending-list', 2, 3, 'task-list', 'incomplete'],
 ];
 
+const BUILT_IN_CARD_TITLES: Record<string, string> = {
+	completed: '已完成', incomplete: '未完成', terminated: '已终止', 'overdue-stat': '已逾期',
+	'completion-rate': '完成率', 'overdue-list': '当前逾期', 'pending-list': '待完成任务',
+};
+
+const CARD_KIND_TITLES: Partial<Record<DashboardCardKind, string>> = {
+	number: '数字', percentage: '百分比', 'task-list': '任务列表', weather: '天气', calendar: '日历',
+	date: '日期', todo: '待办', 'note-stats': '笔记统计', 'recent-files': '文件', news: '资讯',
+	directory: '目录', text: '文本', chart: '图表', countdown: '倒计日', heatmap: '热力图',
+};
+
 export const BUILT_IN_DASHBOARD_CARD_IDS = new Set(DEFAULTS.map(([id]) => id));
 
 const DEFAULT_CARD_BACKGROUNDS: Record<DashboardMetric, string> = {
@@ -69,6 +80,10 @@ function normalizeCard(
 		title: card.title?.trim() || undefined,
 		numberColor: card.numberColor?.trim() || undefined,
 		backgroundColor: card.backgroundColor?.trim() || defaultDashboardCardBackground(metric, kind),
+		percentageDataMode: card.percentageDataMode === 'manual' ? 'manual' : 'task',
+		percentageCurrent: Number.isFinite(card.percentageCurrent) ? Math.max(0, card.percentageCurrent!) : 0,
+		percentageTarget: Number.isFinite(card.percentageTarget) && card.percentageTarget! > 0 ? card.percentageTarget! : 100,
+		percentageDisplay: card.percentageDisplay === 'progress' ? 'progress' : 'number',
 		moduleConfig: isDashboardModuleKind(kind) ? normalizeDashboardModuleConfig(kind, card.moduleConfig) : undefined,
 	};
 }
@@ -161,6 +176,21 @@ export function bindDashboardFilter(
 	filterId: string | null,
 ): PersonalDashboardCardLayout[] {
 	return normalizeDashboardLayout(layout).map((card) => card.id === cardId ? { ...card, filterId } : card);
+}
+
+export function duplicateDashboardCard(
+	layout: readonly PersonalDashboardCardLayout[],
+	sourceId: PersonalDashboardCardId,
+	newId: PersonalDashboardCardId,
+): PersonalDashboardCardLayout[] {
+	const normalized = normalizeDashboardLayout(layout);
+	const sourceIndex = normalized.findIndex((card) => card.id === sourceId);
+	if (sourceIndex < 0 || normalized.some((card) => card.id === newId)) return normalized;
+	const copy = structuredClone(normalized[sourceIndex]!);
+	copy.id = newId;
+	copy.title = `${copy.title ?? BUILT_IN_CARD_TITLES[sourceId] ?? CARD_KIND_TITLES[copy.kind] ?? '自定义卡片'} 副本`;
+	normalized.splice(sourceIndex + 1, 0, copy);
+	return normalized.map((card, order) => ({ ...card, order }));
 }
 
 export function updateDashboardCardPresentation(

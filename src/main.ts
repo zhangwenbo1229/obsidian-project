@@ -54,6 +54,11 @@ export default class ObsidianProjectPlugin extends Plugin {
 		this.registerEvent(this.app.vault.on('modify', (file) => scheduleRefresh(file.path)));
 		this.registerEvent(this.app.vault.on('rename', (file, oldPath) => scheduleRefresh(oldPath, file.path)));
 		this.registerEvent(this.app.vault.on('delete', (file) => scheduleRefresh(file.path)));
+		this.registerEvent(this.app.workspace.on('file-open', (file) => {
+			if (file) void this.manager.recordDashboardFileOpen(file.path).catch((error: unknown) => {
+				new Notice(error instanceof Error ? error.message : String(error));
+			});
+		}));
 		this.register(() => window.clearTimeout(refreshTimer));
 	}
 

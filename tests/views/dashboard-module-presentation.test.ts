@@ -23,6 +23,13 @@ describe('dashboard module presentation', () => {
 		expect(heatmap).not.toContain('vault.getMarkdownFiles()');
 	});
 
+	it('keeps chart labels readable at regular and narrow card widths', () => {
+		expect(css).toMatch(/\.op-chart-label\s*\{[^}]*font-size:\s*(?:11|12)px/u);
+		expect(css).toMatch(/\.op-chart-data-label\s*\{[^}]*font-size:\s*(?:10|11)px/u);
+		expect(css).toMatch(/\.op-chart-legend\s*\{[^}]*font-size:\s*(?:11|12)px/u);
+		expect(css).not.toContain('.op-chart-label { display: none; }');
+	});
+
 	it('keeps weather and news disabled until the user opts in', () => {
 		expect(weather).toContain('networkEnabled');
 		expect(weather).toContain('未启用联网');
@@ -48,6 +55,7 @@ describe('dashboard module presentation', () => {
 
 	it('keeps the active calendar month in the heading and allows resized cards to scroll', () => {
 		expect(calendar).toContain('op-dashboard-module-subtitle');
+		expect(calendar).toContain('ganzhiYear');
 		expect(calendar).not.toContain('op-module-calendar-caption');
 		expect(css).toMatch(/\.op-calendar-card\s*\{[^}]*overflow:\s*auto/u);
 		expect(css).toMatch(/\.op-module-calendar-grid\s*\{[^}]*min-width:/u);

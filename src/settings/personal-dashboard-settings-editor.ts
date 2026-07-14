@@ -16,7 +16,7 @@ const CARD_KIND_LABELS: Record<DashboardCardKind, string> = {
 	date: '日期卡片',
 	todo: '待办卡片',
 	'note-stats': '笔记统计卡片',
-	'recent-files': '最近文件卡片',
+	'recent-files': '文件卡片',
 	news: '资讯卡片',
 	directory: '目录卡片',
 	text: '文本卡片',
@@ -63,6 +63,12 @@ export class PersonalDashboardSettingsEditor {
 				});
 		});
 		new Setting(container)
+			.setName('常用文件统计')
+			.setDesc(`已记录 ${Object.keys(this.value.fileOpenCounts).length} 个文件的打开次数；统计从启用此版本后开始。`)
+			.addButton((button) => button.setButtonText('清空统计').onClick(() => {
+				this.value.fileOpenCounts = {};
+			}));
+		new Setting(container)
 			.setName('个人视图自定义卡片')
 			.setDesc('只有开启的类型才会出现在个人视图空白处的右键新增菜单中；已创建的卡片不会被删除。')
 			.setHeading();
@@ -76,6 +82,7 @@ export class PersonalDashboardSettingsEditor {
 					this.value = {
 						enabledCardKinds: ALL_DASHBOARD_CARD_KINDS.filter((candidate) => enabled.has(candidate)),
 						weatherCredentials: this.value.weatherCredentials,
+						fileOpenCounts: this.value.fileOpenCounts,
 					};
 				}));
 		}

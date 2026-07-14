@@ -41,7 +41,14 @@ describe('personal dashboard module configuration', () => {
 			excludePaths: ['Notes/Archive'],
 		});
 		expect(normalizeDashboardModuleConfig('recent-files', { excludePaths: ['Templates'] })).toMatchObject({
-			excludePaths: ['Templates'],
+			excludePaths: ['Templates'], mode: 'recent-files',
+		});
+		expect(normalizeDashboardModuleConfig('note-stats', {
+			extensions: [' .MD ', 'txt', ''], metadataKey: ' status ', metadataValue: ' active ',
+			displayFields: ['totalSize', 'noteCount', 'unknown', 'noteCount'],
+		})).toMatchObject({
+			extensions: ['md', 'txt'], metadataKey: 'status', metadataValue: 'active',
+			displayFields: ['totalSize', 'noteCount'],
 		});
 		expect(normalizeDashboardModuleConfig('calendar', {})).toEqual({
 			showLunar: true,

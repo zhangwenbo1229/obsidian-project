@@ -42,6 +42,10 @@ export class DashboardCardSettingsModal extends Modal {
 	private displayFields: TaskDisplayField[];
 	private taskListDirection: 'horizontal' | 'vertical';
 	private moduleConfig: DashboardModuleConfig | undefined;
+	private percentageDataMode: 'task' | 'manual';
+	private percentageCurrent: number;
+	private percentageTarget: number;
+	private percentageDisplay: 'number' | 'progress';
 
 	constructor(
 		private readonly manager: ProjectManager,
@@ -61,6 +65,10 @@ export class DashboardCardSettingsModal extends Modal {
 		this.moduleConfig = isDashboardModuleKind(card.kind)
 			? normalizeDashboardModuleConfig(card.kind, card.moduleConfig)
 			: undefined;
+		this.percentageDataMode = card.percentageDataMode ?? 'task';
+		this.percentageCurrent = card.percentageCurrent ?? 0;
+		this.percentageTarget = card.percentageTarget ?? 100;
+		this.percentageDisplay = card.percentageDisplay ?? 'number';
 	}
 
 	onOpen(): void {
@@ -108,16 +116,19 @@ export class DashboardCardSettingsModal extends Modal {
 			return;
 		}
 
-		new Setting(this.contentEl)
-			.setName('数据源')
-			.setDesc('使用全部任务，或绑定一个已保存的项目筛选器。')
-			.addDropdown((dropdown) => {
-				dropdown.addOption('', '全部任务');
-				for (const filter of this.manager.savedProjectFilters) dropdown.addOption(filter.id, filter.name);
-				dropdown.setValue(this.filterId ?? '').onChange((value) => (this.filterId = value || null));
-			});
+		if (this.kind === 'percentage') this.renderPercentageSettings();
+		if (this.kind !== 'percentage' || this.percentageDataMode === 'task') {
+			new Setting(this.contentEl)
+				.setName('数据源')
+				.setDesc('使用全部任务，或绑定一个已保存的项目筛选器。')
+				.addDropdown((dropdown) => {
+					dropdown.addOption('', '全部任务');
+					for (const filter of this.manager.savedProjectFilters) dropdown.addOption(filter.id, filter.name);
+					dropdown.setValue(this.filterId ?? '').onChange((value) => (this.filterId = value || null));
+				});
+		}
 
-		this.renderMetricSetting();
+		if (this.kind !== 'percentage' || this.percentageDataMode === 'task') this.renderMetricSetting();
 		if (this.kind !== 'task-list') {
 			new Setting(this.contentEl)
 				.setName('数字颜色')
@@ -175,6 +186,30 @@ export class DashboardCardSettingsModal extends Modal {
 			});
 	}
 
+	private renderPercentageSettings(): void {
+		new Setting(this.contentEl).setName('百分比数据').addDropdown((dropdown) => dropdown
+			.addOption('task', '任务统计')
+			.addOption('manual', '手工输入')
+			.setValue(this.percentageDataMode)
+			.onChange((value) => {
+				this.percentageDataMode = value === 'manual' ? 'manual' : 'task';
+				this.renderContent();
+			}));
+		if (this.percentageDataMode === 'manual') {
+			new Setting(this.contentEl).setName('当前值').addText((text) => text
+				.setValue(String(this.percentageCurrent))
+				.onChange((value) => (this.percentageCurrent = Math.max(0, Number(value) || 0))));
+			new Setting(this.contentEl).setName('目标值').addText((text) => text
+				.setValue(String(this.percentageTarget))
+				.onChange((value) => (this.percentageTarget = Math.max(0.000001, Number(value) || 100))));
+		}
+		new Setting(this.contentEl).setName('展示方式').addDropdown((dropdown) => dropdown
+			.addOption('number', '百分比数字')
+			.addOption('progress', '进度条')
+			.setValue(this.percentageDisplay)
+			.onChange((value) => (this.percentageDisplay = value === 'progress' ? 'progress' : 'number')));
+	}
+
 	private renderDisplayFields(): void {
 		const group = this.contentEl.createDiv({ cls: 'op-dashboard-field-settings' });
 		group.createEl('h3', { text: '任务显示字段' });
@@ -198,6 +233,10 @@ export class DashboardCardSettingsModal extends Modal {
 					title: this.title.trim() === this.defaultTitle ? undefined : this.title.trim() || undefined,
 					numberColor: this.kind === 'number' || this.kind === 'percentage' ? this.numberColor || undefined : undefined,
 					backgroundColor: this.backgroundColor,
+					percentageDataMode: this.percentageDataMode,
+					percentageCurrent: this.percentageCurrent,
+					percentageTarget: this.percentageTarget,
+					percentageDisplay: this.percentageDisplay,
 					moduleConfig: isDashboardModuleKind(this.kind) ? this.moduleConfig : undefined,
 				},
 			));

@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { buildCalendarMonth, formatChineseLunarDay } from '../../src/views/dashboard-modules/calendar-model';
+import {
+	buildCalendarMonth,
+	formatChineseLunarDay,
+	getChineseCalendarMetadata,
+	getSolarTerm,
+} from '../../src/views/dashboard-modules/calendar-model';
 
 describe('dashboard calendar model', () => {
 	it('builds a Monday-first month grid with adjacent-month padding', () => {
@@ -40,5 +45,32 @@ describe('dashboard calendar model', () => {
 
 	it('keeps at least five rows for compact four-week months', () => {
 		expect(buildCalendarMonth(2021, 1, '2021-02-01', 1, false).cells).toHaveLength(35);
+	});
+
+	it('provides lunar year, month, day and traditional festivals', () => {
+		const springFestival = getChineseCalendarMetadata(new Date(2026, 1, 17));
+		expect(springFestival).toMatchObject({
+			lunarMonth: '正月', lunarDay: '初一', ganzhiYear: '丙午年',
+		});
+		expect(springFestival.lunarFestivals).toContain('春节');
+		const midAutumn = getChineseCalendarMetadata(new Date(2026, 8, 25));
+		expect(midAutumn.lunarFestivals).toContain('中秋节');
+		expect(getChineseCalendarMetadata(new Date(2026, 1, 16)).lunarFestivals).toContain('除夕');
+	});
+
+	it('combines Gregorian festivals, lunar festivals and solar terms', () => {
+		expect(getSolarTerm(new Date(2026, 3, 5))).toBe('清明');
+		const nationalDay = buildCalendarMonth(2026, 9, '2026-10-01', 1, true, true)
+			.cells.find((cell) => cell.isoDate === '2026-10-01');
+		expect(nationalDay?.festivals).toContain('国庆节');
+		expect(nationalDay?.annotation).toBe('国庆节');
+	});
+
+	it('marks today and weekends independently from annotations', () => {
+		const model = buildCalendarMonth(2026, 6, '2026-07-18', 1, true, true);
+		expect(model.cells.find((cell) => cell.isoDate === '2026-07-18')).toMatchObject({
+			isToday: true, isWeekend: true,
+		});
+		expect(model.cells.find((cell) => cell.isoDate === '2026-07-20')?.isWeekend).toBe(false);
 	});
 });

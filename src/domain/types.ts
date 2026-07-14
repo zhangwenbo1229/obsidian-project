@@ -222,6 +222,10 @@ export interface PersonalDashboardCardLayout {
 	title?: string;
 	numberColor?: string;
 	backgroundColor?: string;
+	percentageDataMode?: 'task' | 'manual';
+	percentageCurrent?: number;
+	percentageTarget?: number;
+	percentageDisplay?: 'number' | 'progress';
 	moduleConfig?: DashboardModuleConfig;
 }
 
@@ -247,12 +251,19 @@ export interface NoteStatsDashboardModuleConfig {
 	rootPath: string;
 	excludePaths: string[];
 	topFolderLimit: number;
+	extensions: string[];
+	metadataKey: string;
+	metadataValue: string;
+	displayFields: NoteStatsDisplayField[];
 }
+
+export type NoteStatsDisplayField = 'noteCount' | 'characterCount' | 'folderCount' | 'totalSize' | 'topFolders';
 
 export interface RecentFilesDashboardModuleConfig {
 	rootPath: string;
 	excludePaths: string[];
 	limit: number;
+	mode: 'recent-files' | 'recent-created' | 'recent-edited' | 'frequently-opened';
 }
 
 export interface NewsDashboardModuleConfig {

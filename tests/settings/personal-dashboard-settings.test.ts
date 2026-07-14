@@ -24,6 +24,13 @@ describe('personal dashboard settings', () => {
 			qweatherApiHost: '',
 			openWeatherMapApiKey: '',
 		});
+		expect(normalizePersonalDashboardSettings(undefined).fileOpenCounts).toEqual({});
+	});
+
+	it('normalizes bounded file open counters', () => {
+		expect(normalizePersonalDashboardSettings({
+			fileOpenCounts: { 'a.md': 3.8, ' b.md ': -2, '': 9, 'c.md': 99_999_999 },
+		}).fileOpenCounts).toEqual({ 'a.md': 3, 'c.md': 1_000_000 });
 	});
 
 	it('deduplicates configured kinds, removes unknown kinds, and preserves an explicit empty selection', () => {
@@ -36,6 +43,7 @@ describe('personal dashboard settings', () => {
 			},
 		})).toEqual({
 			enabledCardKinds: ['calendar', 'weather'],
+			fileOpenCounts: {},
 			weatherCredentials: {
 				qweatherApiKey: 'secret',
 				qweatherApiHost: 'https://abc.re.qweatherapi.com',

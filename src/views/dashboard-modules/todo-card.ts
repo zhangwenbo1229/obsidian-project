@@ -1,7 +1,7 @@
-import { setIcon } from 'obsidian';
+import { Notice } from 'obsidian';
 import type { TodoDashboardModuleConfig } from '../../domain/types';
 import { createModuleBody, renderModuleMessage } from './card-ui';
-import { collectIncompleteTodos, isTodoPathInScope } from './todo-model';
+import { collectIncompleteTodos, isTodoPathInScope, setMarkdownTodoCompleted } from './todo-model';
 import { renderTodoSettings } from './module-settings';
 import type { DashboardModuleDefinition, DashboardModuleRenderContext } from './types';
 
@@ -22,13 +22,24 @@ async function renderTodo(context: DashboardModuleRenderContext): Promise<void> 
 	const list = body.createDiv({ cls: 'op-todo-list' });
 	for (const todo of todos) {
 		const file = sources.find((source) => source.path === todo.path)?.file;
-		const button = list.createEl('button', { cls: 'op-todo-item', attr: { type: 'button', title: `${todo.path}:${todo.line}` } });
-		const icon = button.createSpan({ cls: 'op-todo-checkbox' });
-		setIcon(icon, 'square');
-		const copy = button.createSpan({ cls: 'op-todo-copy' });
+		const row = list.createDiv({ cls: 'op-todo-item', attr: { title: `${todo.path}:${todo.line}` } });
+		const checkbox = row.createEl('input', { cls: 'op-todo-checkbox', attr: { type: 'checkbox', 'aria-label': `完成待办：${todo.text}` } });
+		const copy = row.createEl('button', { cls: 'op-todo-copy', attr: { type: 'button' } });
 		copy.createSpan({ text: todo.text });
 		if (config.showSource) copy.createEl('small', { text: `${todo.path} · 第 ${todo.line} 行` });
-		if (file) button.addEventListener('click', () => void context.manager.app.workspace.getLeaf(false).openFile(file));
+		if (file) {
+			copy.addEventListener('click', () => void context.manager.app.workspace.getLeaf(false).openFile(file));
+			checkbox.addEventListener('change', () => {
+				checkbox.disabled = true;
+				void context.manager.app.vault.process(file, (markdown) => setMarkdownTodoCompleted(markdown, todo.line, checkbox.checked))
+					.then(() => context.refresh())
+					.catch((error: unknown) => {
+						checkbox.checked = false;
+						checkbox.disabled = false;
+						new Notice(error instanceof Error ? error.message : String(error));
+					});
+			});
+		}
 	}
 }
 

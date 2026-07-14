@@ -13,6 +13,14 @@ export interface NoteStatistics {
 	characterCount: number;
 	folderCount: number;
 	topFolders: Array<{ path: string; count: number }>;
+	totalSize: number;
+}
+
+export interface NoteStatisticsFilter<T extends DashboardVaultFile> {
+	extensions: string[];
+	metadataKey: string;
+	metadataValue: string;
+	frontmatter: (file: T) => Record<string, unknown> | undefined;
 }
 
 export interface DirectoryTreeNode {
@@ -55,14 +63,44 @@ export function selectRecentFiles<T extends DashboardVaultFile>(
 		.slice(0, Math.max(0, limit));
 }
 
+export function selectDashboardFiles<T extends DashboardVaultFile>(
+	files: readonly T[],
+	rootPath: string,
+	limit: number,
+	excludePaths: readonly string[],
+	mode: 'recent-files' | 'recent-created' | 'recent-edited' | 'frequently-opened',
+	openCounts: Readonly<Record<string, number>>,
+): T[] {
+	return filterFilesByScope(files, rootPath, excludePaths)
+		.sort((left, right) => {
+			const leftValue = mode === 'recent-created' ? left.stat.ctime : mode === 'recent-edited' ? left.stat.mtime : openCounts[left.path] ?? 0;
+			const rightValue = mode === 'recent-created' ? right.stat.ctime : mode === 'recent-edited' ? right.stat.mtime : openCounts[right.path] ?? 0;
+			return rightValue - leftValue || right.stat.mtime - left.stat.mtime || left.path.localeCompare(right.path, 'zh-CN');
+		})
+		.slice(0, Math.max(0, limit));
+}
+
 export async function collectNoteStatistics<T extends DashboardVaultFile>(
 	files: readonly T[],
 	read: (file: T) => Promise<string>,
 	rootPath: string,
 	topFolderLimit: number,
 	excludePaths: readonly string[] = [],
+	filter?: NoteStatisticsFilter<T>,
 ): Promise<NoteStatistics> {
-	const selected = filterFilesByScope(files, rootPath, excludePaths);
+	const selected = filterFilesByScope(files, rootPath, excludePaths).filter((file) => {
+		if (!filter) return true;
+		const extension = file.path.includes('.') ? file.path.split('.').at(-1)?.toLowerCase() ?? '' : '';
+		if (filter.extensions.length > 0 && !filter.extensions.includes(extension)) return false;
+		if (!filter.metadataKey) return true;
+		const value = filter.frontmatter(file)?.[filter.metadataKey];
+		if (value === undefined) return false;
+		if (!filter.metadataValue) return true;
+		const matches = (item: unknown) => typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean'
+			? String(item) === filter.metadataValue
+			: false;
+		return Array.isArray(value) ? value.some(matches) : matches(value);
+	});
 	const contents = await Promise.all(selected.map((file) => read(file)));
 	const folders = new Set<string>();
 	const topFolders = new Map<string, number>();
@@ -85,6 +123,7 @@ export async function collectNoteStatistics<T extends DashboardVaultFile>(
 		noteCount: selected.length,
 		characterCount: contents.reduce((total, content) => total + content.length, 0),
 		folderCount: folders.size,
+		totalSize: selected.reduce((total, file) => total + file.stat.size, 0),
 		topFolders: [...topFolders.entries()]
 			.map(([path, count]) => ({ path, count }))
 			.sort((left, right) => right.count - left.count || left.path.localeCompare(right.path, 'zh-CN'))

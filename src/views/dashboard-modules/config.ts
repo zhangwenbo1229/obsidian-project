@@ -16,6 +16,7 @@ import type {
 } from '../../domain/types';
 
 const WEATHER_PROVIDERS = new Set(['open-meteo', 'qweather', 'openweathermap']);
+const NOTE_STATS_FIELDS = new Set(['noteCount', 'characterCount', 'folderCount', 'totalSize', 'topFolders']);
 
 export const DASHBOARD_MODULE_CATALOG: Array<{
 	kind: DashboardModuleKind;
@@ -28,7 +29,7 @@ export const DASHBOARD_MODULE_CATALOG: Array<{
 	{ kind: 'date', label: '日期', icon: 'calendar-heart', defaultSize: { columns: 1, rows: 2 } },
 	{ kind: 'todo', label: '待办', icon: 'list-todo', defaultSize: { columns: 2, rows: 3 } },
 	{ kind: 'note-stats', label: '笔记统计', icon: 'chart-no-axes-column-increasing', defaultSize: { columns: 2, rows: 2 } },
-	{ kind: 'recent-files', label: '最近文件', icon: 'history', defaultSize: { columns: 2, rows: 3 } },
+	{ kind: 'recent-files', label: '文件', icon: 'files', defaultSize: { columns: 2, rows: 3 } },
 	{ kind: 'news', label: '资讯', icon: 'newspaper', defaultSize: { columns: 2, rows: 3 } },
 	{ kind: 'directory', label: '目录', icon: 'folder-tree', defaultSize: { columns: 2, rows: 3 } },
 	{ kind: 'text', label: '文本', icon: 'notebook-pen', defaultSize: { columns: 2, rows: 2 } },
@@ -112,11 +113,24 @@ export function normalizeDashboardModuleConfig(kind: DashboardModuleKind, value:
 		rootPath: typeof source.rootPath === 'string' ? source.rootPath.trim().replace(/^\/+|\/+$/gu, '') : '',
 		excludePaths: normalizedDirectoryPaths(source.excludePaths),
 		topFolderLimit: boundedNumber(source.topFolderLimit, 5, 1, 12),
+		extensions: [...new Set(normalizedPaths(source.extensions).map((extension) => extension.replace(/^\./u, '').toLowerCase()).filter(Boolean))].length > 0
+			? [...new Set(normalizedPaths(source.extensions).map((extension) => extension.replace(/^\./u, '').toLowerCase()).filter(Boolean))]
+			: ['md'],
+		metadataKey: typeof source.metadataKey === 'string' ? source.metadataKey.trim() : '',
+		metadataValue: typeof source.metadataValue === 'string' ? source.metadataValue.trim() : '',
+		displayFields: Array.isArray(source.displayFields)
+			? [...new Set(source.displayFields.filter((field): field is NoteStatsDashboardModuleConfig['displayFields'][number] =>
+				typeof field === 'string' && NOTE_STATS_FIELDS.has(field),
+			))]
+			: ['noteCount', 'characterCount', 'folderCount', 'topFolders'],
 	} satisfies NoteStatsDashboardModuleConfig;
 	if (kind === 'recent-files') return {
 		rootPath: typeof source.rootPath === 'string' ? source.rootPath.trim().replace(/^\/+|\/+$/gu, '') : '',
 		excludePaths: normalizedDirectoryPaths(source.excludePaths),
 		limit: boundedNumber(source.limit, 8, 3, 30),
+		mode: source.mode === 'recent-created' || source.mode === 'recent-edited' || source.mode === 'frequently-opened'
+			? source.mode
+			: 'recent-files',
 	} satisfies RecentFilesDashboardModuleConfig;
 	if (kind === 'news') return {
 		networkEnabled: source.networkEnabled === true,

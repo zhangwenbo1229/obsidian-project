@@ -7,31 +7,40 @@ import { collectNoteStatistics } from './vault-data';
 
 async function renderNoteStats(context: DashboardModuleRenderContext): Promise<void> {
 	const body = createModuleBody(context.container, 'op-note-stats-card');
-	renderModuleMessage(body, 'loader-circle', '正在统计', '正在读取所选范围内的 Markdown 笔记。', 'op-dashboard-module-loading');
+	renderModuleMessage(body, 'loader-circle', '正在统计', '正在读取所选范围内的文件。', 'op-dashboard-module-loading');
 	const config = context.card.moduleConfig as NoteStatsDashboardModuleConfig;
-	const files = context.manager.app.vault.getMarkdownFiles();
+	const files = context.manager.app.vault.getFiles();
 	const stats = await collectNoteStatistics(
 		files,
-		(file) => context.manager.app.vault.cachedRead(file),
+		(file) => context.manager.app.vault.cachedRead(file).catch(() => ''),
 		config.rootPath,
 		config.topFolderLimit,
 		config.excludePaths,
+		{
+			extensions: config.extensions,
+			metadataKey: config.metadataKey,
+			metadataValue: config.metadataValue,
+			frontmatter: (file) => context.manager.app.metadataCache.getFileCache(file)?.frontmatter,
+		},
 	);
 	if (!context.isCurrent()) return;
 	body.empty();
 	const grid = body.createDiv({ cls: 'op-note-stats-grid' });
-	for (const item of [
-		{ label: '笔记', value: stats.noteCount, icon: 'notebook-tabs' },
-		{ label: '字符', value: stats.characterCount, icon: 'text-cursor-input' },
-		{ label: '目录', value: stats.folderCount, icon: 'folders' },
-	]) {
+	const tiles = {
+		noteCount: { label: '文件', value: stats.noteCount, icon: 'notebook-tabs' },
+		characterCount: { label: '字符', value: stats.characterCount, icon: 'text-cursor-input' },
+		folderCount: { label: '目录', value: stats.folderCount, icon: 'folders' },
+		totalSize: { label: '字节', value: stats.totalSize, icon: 'database' },
+	};
+	for (const field of config.displayFields.filter((field) => field !== 'topFolders')) {
+		const item = tiles[field];
 		const tile = grid.createDiv({ cls: 'op-note-stats-tile' });
 		const icon = tile.createSpan({ cls: 'op-note-stats-icon' });
 		setIcon(icon, item.icon);
 		tile.createEl('strong', { text: formatCompactNumber(item.value) });
 		tile.createSpan({ text: item.label });
 	}
-	if (stats.topFolders.length > 0) {
+	if (config.displayFields.includes('topFolders') && stats.topFolders.length > 0) {
 		const folders = body.createDiv({ cls: 'op-note-stats-folders' });
 		folders.createDiv({ cls: 'op-dashboard-module-section-label', text: '笔记分布' });
 		const maximum = Math.max(...stats.topFolders.map((item) => item.count));

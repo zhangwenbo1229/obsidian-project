@@ -1,6 +1,6 @@
 import type { CalendarDashboardModuleConfig } from '../../domain/types';
 import { localDate } from '../../utils/dates';
-import { buildCalendarMonth } from './calendar-model';
+import { buildCalendarMonth, getChineseCalendarMetadata } from './calendar-model';
 import { createHeadingButton, createModuleBody } from './card-ui';
 import type { DashboardModuleDefinition, DashboardModuleRenderContext } from './types';
 import { renderCalendarSettings } from './module-settings';
@@ -32,18 +32,21 @@ function renderMonth(body: HTMLElement, subtitle: HTMLElement, context: Dashboar
 		config.showLunar,
 		config.showHolidays,
 	);
-	subtitle.setText(`${model.year} 年 ${model.month + 1} 月`);
+	const monthMetadata = getChineseCalendarMetadata(new Date(model.year, model.month, 15));
+	subtitle.setText(`${model.year} 年 ${model.month + 1} 月 · ${monthMetadata.ganzhiYear}`);
 	const grid = body.createDiv({ cls: 'op-module-calendar-grid' });
 	for (const weekday of model.weekdays) grid.createDiv({ cls: 'op-module-calendar-weekday', text: weekday });
 	for (const cell of model.cells) {
 		const day = grid.createDiv({
-			cls: `op-module-calendar-day${cell.inCurrentMonth ? '' : ' is-outside'}${cell.isToday ? ' is-today' : ''}`,
-			attr: { title: cell.isoDate },
+			cls: `op-module-calendar-day${cell.inCurrentMonth ? '' : ' is-outside'}${cell.isToday ? ' is-today' : ''}${cell.isWeekend ? ' is-weekend' : ''}`,
+			attr: {
+				title: [cell.isoDate, cell.ganzhiYear, cell.lunarLabel, ...(cell.festivals ?? [])].filter(Boolean).join(' · '),
+			},
 		});
 		if (cell.day === null) continue;
 		day.createSpan({ cls: 'op-module-calendar-day-number', text: String(cell.day) });
-		const annotation = cell.holiday ?? cell.lunarLabel;
-		if (annotation) day.createSpan({ cls: `op-module-calendar-annotation${cell.holiday ? ' is-holiday' : ''}`, text: annotation });
+		const annotation = cell.annotation ?? cell.lunarLabel;
+		if (annotation) day.createSpan({ cls: `op-module-calendar-annotation${cell.annotation ? ' is-holiday' : ''}`, text: annotation });
 	}
 }
 

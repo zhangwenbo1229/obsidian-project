@@ -71,6 +71,7 @@ export class ProjectManager {
 	private authorizedIdentities = new Map<string, ProtectedIdentity>();
 	private baseDataIssues: PathIssue[] = [];
 	private taskIssuesByPath = new Map<string, PathIssue[]>();
+	private dashboardFileOpenSave: Promise<void> = Promise.resolve();
 
 	constructor(
 		readonly app: App,
@@ -368,6 +369,17 @@ export class ProjectManager {
 		this.personalDashboardSettings = normalizePersonalDashboardSettings(settings);
 		await this.persistConfiguration();
 		for (const listener of this.listeners) listener();
+	}
+
+	async recordDashboardFileOpen(path: string): Promise<void> {
+		const normalizedPath = path.trim();
+		if (!normalizedPath) return;
+		const current = this.personalDashboardSettings.fileOpenCounts[normalizedPath] ?? 0;
+		this.personalDashboardSettings.fileOpenCounts[normalizedPath] = Math.min(1_000_000, current + 1);
+		this.dashboardFileOpenSave = this.dashboardFileOpenSave
+			.catch(() => undefined)
+			.then(() => this.persistConfiguration());
+		await this.dashboardFileOpenSave;
 	}
 
 	async saveProjectViewDisplay(settings: ProjectViewDisplaySettings): Promise<void> {

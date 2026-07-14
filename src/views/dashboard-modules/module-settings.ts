@@ -152,7 +152,7 @@ export function renderNoteStatsSettings(context: DashboardModuleSettingsContext)
 		config = { ...config, ...patch };
 		context.update(config);
 	};
-	section(context.container, '统计范围', '留空根目录会统计整个库，只读取 Markdown 文件。');
+	section(context.container, '统计范围', '留空根目录会统计整个库，文件后缀和元数据筛选只应用于当前卡片。');
 	new Setting(context.container).setName('根目录').addText((text) => text
 		.setPlaceholder('例如：笔记/工作')
 		.setValue(config.rootPath)
@@ -166,6 +166,50 @@ export function renderNoteStatsSettings(context: DashboardModuleSettingsContext)
 		.setDynamicTooltip()
 		.setValue(config.topFolderLimit)
 		.onChange((topFolderLimit) => update({ topFolderLimit })));
+	new Setting(context.container).setName('文件后缀').setDesc('用逗号分隔，不包含点号。').addText((text) => text
+		.setPlaceholder('Md, canvas')
+		.setValue(config.extensions.join(', '))
+		.onChange((value) => update({ extensions: value.split(',').map((item) => item.trim()).filter(Boolean) })));
+	new Setting(context.container).setName('元数据属性').setDesc('留空表示不按元数据筛选。').addText((text) => text
+		.setPlaceholder('Status')
+		.setValue(config.metadataKey)
+		.onChange((metadataKey) => update({ metadataKey })));
+	new Setting(context.container).setName('元数据值').setDesc('留空表示只要求该属性存在。').addText((text) => text
+		.setPlaceholder('Active')
+		.setValue(config.metadataValue)
+		.onChange((metadataValue) => update({ metadataValue })));
+	const fieldLabels: Record<NoteStatsDashboardModuleConfig['displayFields'][number], string> = {
+		noteCount: '文件数量', characterCount: '字符数量', folderCount: '目录数量', totalSize: '文件大小', topFolders: '目录分布',
+	};
+	new Setting(context.container).setName('显示字段').setDesc('拖拽调整顺序，勾选控制显示。').setHeading();
+	const enabled = new Set(config.displayFields);
+	const orderedFields = [
+		...config.displayFields,
+		...(Object.keys(fieldLabels) as NoteStatsDashboardModuleConfig['displayFields']).filter((field) => !enabled.has(field)),
+	];
+	let dragged: NoteStatsDashboardModuleConfig['displayFields'][number] | null = null;
+	for (const field of orderedFields) {
+		const setting = new Setting(context.container).setName(fieldLabels[field]).addToggle((toggle) => toggle
+			.setValue(enabled.has(field)).onChange((active) => {
+				if (active) {
+					enabled.add(field);
+					config.displayFields.push(field);
+				} else {
+					enabled.delete(field);
+					config.displayFields = config.displayFields.filter((candidate) => candidate !== field);
+				}
+				update({ displayFields: [...config.displayFields] });
+			}));
+		setting.settingEl.draggable = true;
+		setting.settingEl.addEventListener('dragstart', () => (dragged = field));
+		setting.settingEl.addEventListener('dragover', (event) => event.preventDefault());
+		setting.settingEl.addEventListener('drop', () => {
+			if (!dragged || dragged === field || !enabled.has(dragged) || !enabled.has(field)) return;
+			const fields = config.displayFields.filter((candidate) => candidate !== dragged);
+			fields.splice(fields.indexOf(field), 0, dragged);
+			update({ displayFields: fields });
+		});
+	}
 }
 
 export function renderRecentFilesSettings(context: DashboardModuleSettingsContext): void {
@@ -174,7 +218,14 @@ export function renderRecentFilesSettings(context: DashboardModuleSettingsContex
 		config = { ...config, ...patch };
 		context.update(config);
 	};
-	section(context.container, '最近文件', '按 Markdown 文件的最后修改时间排序。');
+	section(context.container, '文件', '按创建、编辑或从本次升级后累计的打开次数排序。');
+	new Setting(context.container).setName('显示模式').addDropdown((dropdown) => dropdown
+		.addOption('recent-files', '最近文件')
+		.addOption('recent-edited', '最近编辑')
+		.addOption('recent-created', '最近创建')
+		.addOption('frequently-opened', '常用文件')
+		.setValue(config.mode)
+		.onChange((mode) => update({ mode: mode as RecentFilesDashboardModuleConfig['mode'] })));
 	new Setting(context.container).setName('根目录').addText((text) => text
 		.setPlaceholder('留空表示整个库')
 		.setValue(config.rootPath)

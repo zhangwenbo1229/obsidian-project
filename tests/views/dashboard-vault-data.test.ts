@@ -6,6 +6,7 @@ import {
 	filterFilesByScope,
 	formatRelativeTime,
 	selectRecentFiles,
+	selectDashboardFiles,
 } from '../../src/views/dashboard-modules/vault-data';
 
 const files = [
@@ -83,5 +84,37 @@ describe('dashboard vault data', () => {
 		expect(formatRelativeTime(now - 30_000, now)).toBe('刚刚');
 		expect(formatRelativeTime(now - 5 * 60_000, now)).toBe('5 分钟前');
 		expect(formatRelativeTime(now - 3 * 86_400_000, now)).toBe('3 天前');
+	});
+
+	it('filters note statistics by extension and frontmatter metadata', async () => {
+		const mixed = [
+			...files,
+			{ path: 'Work/Data.json', basename: 'Data', stat: { mtime: 600, ctime: 3, size: 30 } },
+		];
+		const stats = await collectNoteStatistics(
+			mixed,
+			() => Promise.resolve('body'),
+			'',
+			5,
+			[],
+			{
+				extensions: ['md'], metadataKey: 'status', metadataValue: 'active',
+				frontmatter: (file) => file.path === 'Work/Alpha.md' ? { status: 'active' } : { status: 'archived' },
+			},
+		);
+		expect(stats.noteCount).toBe(1);
+		expect(stats.totalSize).toBe(12);
+	});
+
+	it('sorts file card modes by creation, editing, and open frequency', () => {
+		const ranked = [
+			{ path: 'a.md', basename: 'a', stat: { mtime: 10, ctime: 30, size: 1 } },
+			{ path: 'b.md', basename: 'b', stat: { mtime: 40, ctime: 20, size: 1 } },
+			{ path: 'c.md', basename: 'c', stat: { mtime: 20, ctime: 10, size: 1 } },
+		];
+		expect(selectDashboardFiles(ranked, '', 3, [], 'recent-created', {}).map((file) => file.path)).toEqual(['a.md', 'b.md', 'c.md']);
+		expect(selectDashboardFiles(ranked, '', 3, [], 'recent-files', {}).map((file) => file.path)).toEqual(['b.md', 'c.md', 'a.md']);
+		expect(selectDashboardFiles(ranked, '', 3, [], 'recent-edited', {}).map((file) => file.path)).toEqual(['b.md', 'c.md', 'a.md']);
+		expect(selectDashboardFiles(ranked, '', 3, [], 'frequently-opened', { 'c.md': 9, 'a.md': 2 }).map((file) => file.path)).toEqual(['c.md', 'a.md', 'b.md']);
 	});
 });
