@@ -5,6 +5,12 @@ import {
 	type TaskParseResult,
 } from '../markdown/task-parser';
 import type { VaultAdapter } from './vault-adapter';
+import { mapConcurrent } from '../utils/async-pool';
+
+export interface TaskSource {
+	path: string;
+	source: string;
+}
 
 export class TaskRepository {
 	constructor(private readonly vault: VaultAdapter) {}
@@ -45,13 +51,13 @@ export class TaskRepository {
 	}
 
 	async listPaths(): Promise<string[]> {
+		return (await this.listSources()).map((item) => item.path);
+	}
+
+	async listSources(): Promise<TaskSource[]> {
 		const paths = await this.vault.listMarkdownFiles();
-		const results: string[] = [];
-		for (const path of paths) {
-			const source = await this.vault.read(path);
-			if (/^---[\s\S]*?^pm-kind:\s*task\s*$/mu.test(source)) results.push(path);
-		}
-		return results;
+		const sources = await mapConcurrent(paths, 8, async (path) => ({ path, source: await this.vault.read(path) }));
+		return sources.filter(({ source }) => /^---[\s\S]*?^pm-kind:\s*task\s*$/mu.test(source));
 	}
 
 	rename(path: string, nextPath: string): Promise<void> {

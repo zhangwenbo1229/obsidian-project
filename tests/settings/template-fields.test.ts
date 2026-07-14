@@ -15,6 +15,13 @@ describe('task template field configuration', () => {
 		]);
 		const normalized = normalizeTaskFieldConfig();
 		for (const field of TASK_FORM_FIELDS) expect(normalized[field]).toMatchObject({ enabled: true, required: false });
+		const styled = normalizeTaskFieldConfig({ title: {
+			enabled: true, required: true, icon: ' heading ', color: '#Ab12Cd',
+		} });
+		expect(styled.title).toMatchObject({ icon: 'heading', color: '#ab12cd' });
+		expect(normalizeTaskFieldConfig({ title: {
+			enabled: true, required: false, icon: ' ', color: 'red',
+		} }).title).toMatchObject({ icon: undefined, color: undefined });
 	});
 
 	it('provides a dedicated editor and mounts it from task templates', () => {
@@ -23,5 +30,8 @@ describe('task template field configuration', () => {
 		expect(templateSource).toContain('fieldConfig');
 		expect(templateSource).toContain('field.options');
 		expect(templateSource).toContain('field.default');
+		expect(templateSource).toContain('TaskMarkerPickerModal');
+		expect(templateSource).toContain('field.color');
+		expect(templateSource).toContain('addCustomFieldOption');
 	});
 });

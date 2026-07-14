@@ -2,6 +2,7 @@ import { Setting } from 'obsidian';
 import type { TaskFormField, TaskTypeDefinition } from '../domain/types';
 import type { ProjectManager } from '../services/project-manager';
 import { fromDateTimeLocalInput, toDateTimeLocalInput } from '../utils/dates';
+import { TaskMarkerPickerModal } from '../modals/task-marker-picker-modal';
 import {
 	normalizeTaskFieldConfig,
 	TASK_FORM_FIELDS,
@@ -34,6 +35,20 @@ export class TemplateFieldEditor {
 				}))
 				.addToggle((toggle) => toggle.setTooltip('必填').setValue(rule.required).onChange((required) => {
 					rule.required = required;
+				}))
+				.addExtraButton((button) => button.setIcon('smile-plus').setTooltip('选择字段图标').onClick(() => {
+					new TaskMarkerPickerModal(this.manager.app, rule.icon ?? '', (icon) => {
+						rule.icon = icon;
+						this.rerender();
+					}).open();
+				}));
+			new Setting(container).setName(`${TASK_FORM_FIELD_LABELS[field]}样式`)
+				.setDesc(rule.icon ? `图标：${rule.icon}` : '未设置图标')
+				.addColorPicker((picker) => picker.setValue(rule.color ?? '#626f86').onChange((color) => (rule.color = color)))
+				.addExtraButton((button) => button.setIcon('rotate-ccw').setTooltip('清除图标和颜色').onClick(() => {
+					rule.icon = undefined;
+					rule.color = undefined;
+					this.rerender();
 				}));
 			if (rule.enabled && !NO_DEFAULT_FIELDS.has(field)) this.renderDefault(container, field);
 		}

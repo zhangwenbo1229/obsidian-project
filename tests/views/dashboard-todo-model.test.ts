@@ -4,6 +4,7 @@ import {
 	extractIncompleteTodos,
 	isTodoPathInScope,
 	setMarkdownTodoCompleted,
+	setMarkdownTodoText,
 } from '../../src/views/dashboard-modules/todo-model';
 
 describe('dashboard todo model', () => {
@@ -39,5 +40,14 @@ describe('dashboard todo model', () => {
 	it('refuses to overwrite a stale or non-task source line', () => {
 		expect(() => setMarkdownTodoCompleted('plain text', 1, true)).toThrow('不再是 Markdown 任务');
 		expect(() => setMarkdownTodoCompleted('- [ ] Task', 3, true)).toThrow('不存在');
+	});
+
+	it('edits only the guarded task text and preserves Markdown syntax', () => {
+		const markdown = '# List\r\n  - [x] Old text  \r\n- [ ] Other\r\n';
+		expect(setMarkdownTodoText(markdown, 2, 'Old text', 'New **Markdown**')).toBe(
+			'# List\r\n  - [x] New **Markdown**  \r\n- [ ] Other\r\n',
+		);
+		expect(() => setMarkdownTodoText('- [ ] Changed', 1, 'Old', 'New')).toThrow('已被修改');
+		expect(() => setMarkdownTodoText('- [ ] Old', 1, 'Old', '   ')).toThrow('不能为空');
 	});
 });

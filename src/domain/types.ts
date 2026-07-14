@@ -28,6 +28,8 @@ export interface TaskFieldRule {
 	enabled: boolean;
 	required: boolean;
 	defaultValue?: unknown;
+	icon?: string;
+	color?: string;
 }
 
 export type TaskFieldConfig = Partial<Record<TaskFormField, TaskFieldRule>>;
@@ -86,6 +88,8 @@ export interface CustomFieldDefinition {
 	default: unknown;
 	options?: CustomFieldOption[];
 	taskTypeIds?: string[];
+	icon?: string;
+	color?: string;
 }
 
 export interface WorkflowStatus {
@@ -214,6 +218,8 @@ export interface PersonalDashboardCardLayout {
 	order: number;
 	columnSpan: number;
 	rowSpan: number;
+	columnStart?: number;
+	rowStart?: number;
 	filterId: string | null;
 	kind: DashboardCardKind;
 	metric: DashboardMetric;
@@ -222,9 +228,11 @@ export interface PersonalDashboardCardLayout {
 	title?: string;
 	numberColor?: string;
 	backgroundColor?: string;
-	percentageDataMode?: 'task' | 'manual';
+	fontSize?: number;
+	percentageDataMode?: 'task' | 'manual' | 'direct';
 	percentageCurrent?: number;
 	percentageTarget?: number;
+	percentageValue?: number;
 	percentageDisplay?: 'number' | 'progress';
 	moduleConfig?: DashboardModuleConfig;
 }
@@ -255,6 +263,17 @@ export interface NoteStatsDashboardModuleConfig {
 	metadataKey: string;
 	metadataValue: string;
 	displayFields: NoteStatsDisplayField[];
+	fileCountMetrics: NoteCountMetricConfig[];
+}
+
+export interface NoteCountMetricConfig {
+	id: string;
+	name: string;
+	rootPath: string;
+	excludePaths: string[];
+	extensions: string[];
+	metadataKey: string;
+	metadataValue: string;
 }
 
 export type NoteStatsDisplayField = 'noteCount' | 'characterCount' | 'folderCount' | 'totalSize' | 'topFolders';

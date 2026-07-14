@@ -11,6 +11,9 @@ import { renderTags } from './tag-presentation';
 import { formatCustomFieldValue, formatTaskCustomFields } from './custom-field-presentation';
 import { renderTaskRelations } from './task-relation-presentation';
 import { enhanceRenderedTaskLists } from './subtask-presentation';
+import { renderFieldLabel } from './field-presentation';
+import { taskFieldRule } from '../settings/task-field-configuration';
+import type { FieldPresentation } from './field-presentation';
 
 export interface TaskCardFieldOptions {
 	titleClassName?: string;
@@ -25,11 +28,16 @@ function personName(manager: ProjectManager, id: string | null, fallback: string
 	return manager.globalConfig.people.find((person) => person.id === id)?.name ?? fallback;
 }
 
-function labeledField(parent: HTMLElement, field: TaskDisplayField, value: string, manager: ProjectManager): void {
+function labeledField(
+	parent: HTMLElement, field: TaskDisplayField, value: string, manager: ProjectManager, presentation?: FieldPresentation,
+): void {
 	if (!value) return;
 	const className = field.startsWith('custom:') ? 'custom' : field;
 	const element = parent.createDiv({ cls: `op-card-field is-${className}` });
-	element.createSpan({ cls: 'op-card-field-label', text: taskDisplayFieldLabel(field, taskCustomFields(manager)) });
+	const definition = presentation ?? (field.startsWith('custom:')
+		? taskCustomFields(manager).find((item) => item.key === field.slice('custom:'.length))
+		: undefined);
+	renderFieldLabel(element, taskDisplayFieldLabel(field, taskCustomFields(manager)), definition);
 	element.createSpan({ cls: 'op-card-field-value', text: value });
 }
 
@@ -57,10 +65,11 @@ function markdownField(
 	task: IndexedTask,
 	manager: ProjectManager,
 	options: TaskCardFieldOptions,
+	presentation?: FieldPresentation,
 ): void {
 	if (!value.trim()) return;
 	const element = parent.createDiv({ cls: `op-card-field is-${field}` });
-	element.createSpan({ cls: 'op-card-field-label', text: taskDisplayFieldLabel(field) });
+	renderFieldLabel(element, taskDisplayFieldLabel(field), presentation);
 	const valueElement = element.createDiv({ cls: 'op-card-field-value' });
 	renderTaskMarkdownValue(valueElement, value, task, manager, options.component);
 }
@@ -75,6 +84,7 @@ export function renderTaskCardFields(
 	const flow = parent.createDiv({ cls: options.compact ? 'op-task-field-flow is-compact' : 'op-task-field-flow' });
 	const metadata = task.document.metadata;
 	const taskType = task.project.taskTypes.find((type) => type.id === metadata.taskTypeId);
+	const presentation = (field: Parameters<typeof taskFieldRule>[1]) => taskFieldRule(taskType, field);
 	const renderKey = (container: HTMLElement) => {
 		const key = container.createSpan({ cls: 'op-task-key' });
 		if (options.markerBeforeKey) renderTaskMarker(key, taskType);
@@ -97,19 +107,19 @@ export function renderTaskCardFields(
 			const wrapper = (options.priorityInCorner ? parent : flow).createDiv({
 				cls: options.priorityInCorner ? 'op-task-card-priority' : 'op-card-field is-priority',
 			});
-			if (!options.priorityInCorner) wrapper.createSpan({ cls: 'op-card-field-label', text: TASK_DISPLAY_FIELD_LABELS.priority });
+			if (!options.priorityInCorner) renderFieldLabel(wrapper, TASK_DISPLAY_FIELD_LABELS.priority, presentation('priority'));
 			renderTaskPriority(wrapper, metadata.priority);
 		}
 		else if (field === 'project') labeledField(flow, field, `${task.project.code} · ${task.project.name}`, manager);
 		else if (field === 'type') labeledField(flow, field, taskType?.name ?? metadata.taskTypeId, manager);
 		else if (field === 'status') labeledField(flow, field, task.project.workflow.statuses.find((status) => status.id === metadata.statusId)?.name ?? metadata.statusId, manager);
-		else if (field === 'reporter') labeledField(flow, field, personName(manager, metadata.reporterId, '未设置'), manager);
-		else if (field === 'assignee') labeledField(flow, field, personName(manager, metadata.assigneeId, '未分配'), manager);
-		else if (field === 'startDate') labeledField(flow, field, displayDateTime(metadata.startDate, '无开始时间'), manager);
-		else if (field === 'dueDate') labeledField(flow, field, displayDateTime(metadata.dueDate, '无计划日期'), manager);
+		else if (field === 'reporter') labeledField(flow, field, personName(manager, metadata.reporterId, '未设置'), manager, presentation('reporter'));
+		else if (field === 'assignee') labeledField(flow, field, personName(manager, metadata.assigneeId, '未分配'), manager, presentation('assignee'));
+		else if (field === 'startDate') labeledField(flow, field, displayDateTime(metadata.startDate, '无开始时间'), manager, presentation('startDate'));
+		else if (field === 'dueDate') labeledField(flow, field, displayDateTime(metadata.dueDate, '无计划日期'), manager, presentation('dueDate'));
 		else if (field === 'tags' && metadata.tags.length > 0) {
 			const element = flow.createDiv({ cls: 'op-card-field is-tags' });
-			element.createSpan({ cls: 'op-card-field-label', text: TASK_DISPLAY_FIELD_LABELS.tags });
+			renderFieldLabel(element, TASK_DISPLAY_FIELD_LABELS.tags, presentation('tags'));
 			renderTags(element, metadata.tags, manager);
 		}
 		else if (field === 'customFields') labeledField(flow, field, formatTaskCustomFields(task, manager), manager);
@@ -119,11 +129,11 @@ export function renderTaskCardFields(
 		}
 		else if (field === 'relations' && task.document.relations.some((relation) => relation.type === 'related')) {
 			const element = flow.createDiv({ cls: 'op-card-field is-relations' });
-			element.createSpan({ cls: 'op-card-field-label', text: TASK_DISPLAY_FIELD_LABELS.relations });
+			renderFieldLabel(element, TASK_DISPLAY_FIELD_LABELS.relations, presentation('relations'));
 			const value = element.createDiv({ cls: 'op-card-field-value op-task-relation-list' });
 			renderTaskRelations(value, task, manager);
 		}
-		else if (field === 'links') markdownField(flow, field, task.document.unknownLinks.join('\n\n'), task, manager, options);
-		else if (field === 'subtasks') markdownField(flow, field, task.document.subtasks ?? '', task, manager, options);
+		else if (field === 'links') markdownField(flow, field, task.document.unknownLinks.join('\n\n'), task, manager, options, presentation('links'));
+		else if (field === 'subtasks') markdownField(flow, field, task.document.subtasks ?? '', task, manager, options, presentation('subtasks'));
 	}
 }

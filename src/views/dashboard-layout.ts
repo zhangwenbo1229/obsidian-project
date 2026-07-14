@@ -67,10 +67,13 @@ function normalizeCard(
 ): PersonalDashboardCardLayout {
 	const kind = card.kind ?? defaults.kind;
 	const metric = card.metric ?? defaults.metric;
+	const columnSpan = Math.min(8, Math.max(1, card.columnSpan ?? defaults.columnSpan));
 	return {
 		id: card.id,
 		order: Number.isFinite(card.order) ? card.order! : defaults.order,
-		columnSpan: Math.min(4, Math.max(1, card.columnSpan ?? defaults.columnSpan)),
+		columnSpan,
+		columnStart: Number.isFinite(card.columnStart) ? Math.min(8 - columnSpan + 1, Math.max(1, Math.round(card.columnStart!))) : undefined,
+		rowStart: Number.isFinite(card.rowStart) ? Math.max(1, Math.round(card.rowStart!)) : undefined,
 		rowSpan: Math.min(6, Math.max(1, card.rowSpan ?? defaults.rowSpan)),
 		filterId: card.filterId ?? null,
 		kind,
@@ -80,9 +83,11 @@ function normalizeCard(
 		title: card.title?.trim() || undefined,
 		numberColor: card.numberColor?.trim() || undefined,
 		backgroundColor: card.backgroundColor?.trim() || defaultDashboardCardBackground(metric, kind),
-		percentageDataMode: card.percentageDataMode === 'manual' ? 'manual' : 'task',
+		fontSize: Number.isFinite(card.fontSize) ? Math.min(28, Math.max(10, Math.round(card.fontSize!))) : 14,
+		percentageDataMode: card.percentageDataMode === 'manual' || card.percentageDataMode === 'direct' ? card.percentageDataMode : 'task',
 		percentageCurrent: Number.isFinite(card.percentageCurrent) ? Math.max(0, card.percentageCurrent!) : 0,
 		percentageTarget: Number.isFinite(card.percentageTarget) && card.percentageTarget! > 0 ? card.percentageTarget! : 100,
+		percentageValue: Number.isFinite(card.percentageValue) ? Math.min(100, Math.max(0, card.percentageValue!)) : 0,
 		percentageDisplay: card.percentageDisplay === 'progress' ? 'progress' : 'number',
 		moduleConfig: isDashboardModuleKind(kind) ? normalizeDashboardModuleConfig(kind, card.moduleConfig) : undefined,
 	};
@@ -165,9 +170,31 @@ export function resizeDashboardCard(
 ): PersonalDashboardCardLayout[] {
 	return normalizeDashboardLayout(layout).map((card) => card.id === cardId ? {
 		...card,
-		columnSpan: Math.min(4, Math.max(1, Math.round(columnSpan))),
+		columnSpan: Math.min(8, Math.max(1, Math.round(columnSpan))),
 		rowSpan: Math.min(6, Math.max(1, Math.round(rowSpan))),
 	} : card);
+}
+
+export function moveDashboardCard(
+	layout: readonly PersonalDashboardCardLayout[],
+	cardId: PersonalDashboardCardId,
+	columnStart: number,
+	rowStart: number,
+): PersonalDashboardCardLayout[] {
+	const cards = normalizeDashboardLayout(layout);
+	const moving = cards.find((card) => card.id === cardId);
+	if (!moving) return cards;
+	const column = Math.min(8 - moving.columnSpan + 1, Math.max(1, Math.round(columnStart)));
+	let row = Math.max(1, Math.round(rowStart));
+	const overlaps = (candidateRow: number, card: PersonalDashboardCardLayout) => {
+		if (card.id === cardId || card.columnStart === undefined || card.rowStart === undefined) return false;
+		return column < card.columnStart + card.columnSpan
+			&& column + moving.columnSpan > card.columnStart
+			&& candidateRow < card.rowStart + card.rowSpan
+			&& candidateRow + moving.rowSpan > card.rowStart;
+	};
+	while (cards.some((card) => overlaps(row, card))) row += 1;
+	return cards.map((card) => card.id === cardId ? { ...card, columnStart: column, rowStart: row } : card);
 }
 
 export function bindDashboardFilter(
@@ -215,7 +242,7 @@ export function calculateDashboardResizePreview(
 	rowUnit: number,
 ): Pick<PersonalDashboardCardLayout, 'columnSpan' | 'rowSpan'> {
 	return {
-		columnSpan: Math.min(4, Math.max(1, columnSpan + Math.round(deltaX / Math.max(1, columnUnit)))),
+		columnSpan: Math.min(8, Math.max(1, columnSpan + Math.round(deltaX / Math.max(1, columnUnit)))),
 		rowSpan: Math.min(6, Math.max(1, rowSpan + Math.round(deltaY / Math.max(1, rowUnit)))),
 	};
 }

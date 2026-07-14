@@ -1,5 +1,7 @@
 import type { ProjectManager } from '../services/project-manager';
 import { groupTags } from '../services/tag-group-service';
+import type { FieldPresentation } from '../views/field-presentation';
+import { applyLabelPresentation } from '../views/field-presentation';
 
 function normalizeTag(value: string): string {
 	return value.trim().replace(/^#+/u, '').replace(/^\/+|\/+$/gu, '');
@@ -10,11 +12,13 @@ export function renderGroupedTagPicker(
 	manager: ProjectManager,
 	selectedTags: readonly string[],
 	onChange: (tags: string[]) => void,
+	presentation?: FieldPresentation,
 ): void {
 	const selected = new Set(selectedTags);
 	const root = container.createDiv({ cls: 'op-grouped-tag-picker' });
 	const heading = root.createDiv({ cls: 'op-grouped-tag-picker-heading' });
-	heading.createEl('strong', { text: '标签' });
+	const title = heading.createEl('strong', { text: '标签' });
+	applyLabelPresentation(title, presentation);
 	const choices = root.createDiv({ cls: 'op-grouped-tag-picker-groups' });
 
 	const renderChoices = () => {

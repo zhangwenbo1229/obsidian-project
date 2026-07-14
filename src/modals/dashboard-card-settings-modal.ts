@@ -36,15 +36,17 @@ export class DashboardCardSettingsModal extends Modal {
 	private title: string;
 	private numberColor: string;
 	private backgroundColor: string;
+	private fontSize: number;
 	private kind: DashboardCardKind;
 	private metric: DashboardMetric;
 	private filterId: string | null;
 	private displayFields: TaskDisplayField[];
 	private taskListDirection: 'horizontal' | 'vertical';
 	private moduleConfig: DashboardModuleConfig | undefined;
-	private percentageDataMode: 'task' | 'manual';
+	private percentageDataMode: 'task' | 'manual' | 'direct';
 	private percentageCurrent: number;
 	private percentageTarget: number;
+	private percentageValue: number;
 	private percentageDisplay: 'number' | 'progress';
 
 	constructor(
@@ -57,6 +59,7 @@ export class DashboardCardSettingsModal extends Modal {
 		this.title = card.title ?? defaultTitle;
 		this.numberColor = card.numberColor ?? '#0c66e4';
 		this.backgroundColor = card.backgroundColor ?? defaultDashboardCardBackground(card.metric, card.kind);
+		this.fontSize = card.fontSize ?? 14;
 		this.kind = card.kind;
 		this.metric = card.metric;
 		this.filterId = card.filterId;
@@ -68,6 +71,7 @@ export class DashboardCardSettingsModal extends Modal {
 		this.percentageDataMode = card.percentageDataMode ?? 'task';
 		this.percentageCurrent = card.percentageCurrent ?? 0;
 		this.percentageTarget = card.percentageTarget ?? 100;
+		this.percentageValue = card.percentageValue ?? 0;
 		this.percentageDisplay = card.percentageDisplay ?? 'number';
 	}
 
@@ -103,6 +107,7 @@ export class DashboardCardSettingsModal extends Modal {
 					});
 			});
 		this.renderBackgroundSetting();
+		this.renderFontSizeSetting();
 		const definition = getDashboardModuleDefinition(this.kind);
 		if (definition && this.moduleConfig) {
 			definition.renderSettings({
@@ -168,6 +173,13 @@ export class DashboardCardSettingsModal extends Modal {
 			.addColorPicker((picker) => picker.setValue(this.backgroundColor).onChange((value) => (this.backgroundColor = value)));
 	}
 
+	private renderFontSizeSetting(): void {
+		new Setting(this.contentEl)
+			.setName('文字大小')
+			.setDesc('仅调整当前卡片，范围为 10–28 px。')
+			.addSlider((slider) => slider.setLimits(10, 28, 1).setDynamicTooltip().setValue(this.fontSize).onChange((value) => (this.fontSize = value)));
+	}
+
 	private renderMetricSetting(): void {
 		const metrics: DashboardMetric[] = this.kind === 'percentage'
 			? ['completion-rate', 'overdue-rate']
@@ -190,9 +202,10 @@ export class DashboardCardSettingsModal extends Modal {
 		new Setting(this.contentEl).setName('百分比数据').addDropdown((dropdown) => dropdown
 			.addOption('task', '任务统计')
 			.addOption('manual', '手工输入')
+			.addOption('direct', '直接输入百分比')
 			.setValue(this.percentageDataMode)
 			.onChange((value) => {
-				this.percentageDataMode = value === 'manual' ? 'manual' : 'task';
+				this.percentageDataMode = value === 'manual' || value === 'direct' ? value : 'task';
 				this.renderContent();
 			}));
 		if (this.percentageDataMode === 'manual') {
@@ -202,6 +215,16 @@ export class DashboardCardSettingsModal extends Modal {
 			new Setting(this.contentEl).setName('目标值').addText((text) => text
 				.setValue(String(this.percentageTarget))
 				.onChange((value) => (this.percentageTarget = Math.max(0.000001, Number(value) || 100))));
+		}
+		if (this.percentageDataMode === 'direct') {
+			new Setting(this.contentEl).setName('百分比').addText((text) => {
+				text.inputEl.type = 'number';
+				text.inputEl.min = '0';
+				text.inputEl.max = '100';
+				text.setValue(String(this.percentageValue)).onChange((value) => {
+					this.percentageValue = Math.min(100, Math.max(0, Number(value) || 0));
+				});
+			});
 		}
 		new Setting(this.contentEl).setName('展示方式').addDropdown((dropdown) => dropdown
 			.addOption('number', '百分比数字')
@@ -233,9 +256,11 @@ export class DashboardCardSettingsModal extends Modal {
 					title: this.title.trim() === this.defaultTitle ? undefined : this.title.trim() || undefined,
 					numberColor: this.kind === 'number' || this.kind === 'percentage' ? this.numberColor || undefined : undefined,
 					backgroundColor: this.backgroundColor,
+					fontSize: this.fontSize,
 					percentageDataMode: this.percentageDataMode,
 					percentageCurrent: this.percentageCurrent,
 					percentageTarget: this.percentageTarget,
+					percentageValue: this.percentageValue,
 					percentageDisplay: this.percentageDisplay,
 					moduleConfig: isDashboardModuleKind(this.kind) ? this.moduleConfig : undefined,
 				},

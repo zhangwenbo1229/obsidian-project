@@ -46,6 +46,7 @@ import { normalizeConfigurationSnapshot } from '../settings/configuration-store'
 import { normalizeProjectViewDisplay, type ProjectViewDisplaySettings } from '../views/task-display-settings';
 import { removeTagGroupAssignments, renameTagGroupAssignments, rootTagPath } from './tag-group-service';
 import { normalizePersonalDashboardSettings, type PersonalDashboardSettings } from '../views/personal-dashboard-settings';
+import { mapConcurrent } from '../utils/async-pool';
 
 export const DEFAULT_GLOBAL_CONFIG_PATH = '项目管理/全局配置.md';
 
@@ -88,7 +89,7 @@ export class ProjectManager {
 			() => this.loadLegacyConfiguration(),
 		);
 		this.applyConfiguration(snapshot);
-		await this.reload();
+		await this.rebuildTaskIndex();
 	}
 
 	async reload(): Promise<void> {
@@ -97,12 +98,14 @@ export class ProjectManager {
 		const snapshot = await this.configStore.load();
 		if (!snapshot) throw new Error('插件配置数据不存在。');
 		this.applyConfiguration(snapshot);
+		await this.rebuildTaskIndex();
+	}
+
+	private async rebuildTaskIndex(): Promise<void> {
 		const customKeys = new Set(this.projects.flatMap((project) => project.customFields.map((field) => field.key)));
-		const tasks: IndexedTask[] = [];
-		for (const path of await this.taskRepository.listPaths()) {
-			const task = await this.parseIndexedTask(path, customKeys);
-			if (task) tasks.push(task);
-		}
+		const sources = await this.taskRepository.listSources();
+		const parsed = await mapConcurrent(sources, 8, ({ path, source }) => this.parseIndexedTask(path, customKeys, source));
+		const tasks = parsed.filter((task): task is IndexedTask => task !== null);
 		this.index.replace(tasks);
 		const repairedTagStyles = repairMalformedTagStyles(
 			this.tagStyles,

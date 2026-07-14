@@ -1731,7 +1731,7 @@
 
 .op-dashboard-workspace {
 	display: grid;
-	grid-template-columns: repeat(4, minmax(180px, 1fr));
+	grid-template-columns: repeat(8, minmax(90px, 1fr));
 	grid-auto-rows: 112px;
 	grid-auto-flow: dense;
 	gap: 12px;
@@ -1739,9 +1739,10 @@
 }
 
 .op-dashboard-card {
+	--op-dashboard-card-font-size: 14px;
 	position: relative;
 	box-sizing: border-box;
-	min-width: 180px;
+	min-width: 90px;
 	min-height: 112px;
 	padding: 14px;
 	overflow: auto;
@@ -1752,7 +1753,16 @@
 	box-shadow: 0 1px 2px rgb(9 30 66 / 8%), 0 6px 18px rgb(9 30 66 / 8%);
 	container-type: inline-size;
 	scrollbar-width: none;
+	font-size: var(--op-dashboard-card-font-size);
 }
+.op-dashboard-card :where(button, input, textarea, select, p, span, small, strong, label, li, td, th) {
+	font-size: var(--op-dashboard-card-font-size) !important;
+}
+.op-dashboard-card .op-dashboard-stat-value,
+.op-dashboard-card .op-dashboard-progress-value { font-size: calc(var(--op-dashboard-card-font-size) * 2.5); }
+.op-dashboard-card svg text { font-size: var(--op-dashboard-card-font-size); }
+.op-field-label-icon { display: inline-flex; align-items: center; margin-right: 5px; vertical-align: middle; }
+.op-field-label-icon svg { width: 1em; height: 1em; }
 .op-dashboard-card::-webkit-scrollbar { display: none; }
 .op-dashboard-resize-handle {
 	position: absolute;
@@ -2145,7 +2155,10 @@
 .op-todo-item:hover { background: var(--background-modifier-hover); }
 .op-todo-checkbox { width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--interactive-accent); }
 .op-todo-copy { display: grid; min-width: 0; gap: 2px; }
-.op-todo-copy { width: 100%; padding: 0; border: 0; background: transparent; box-shadow: none; text-align: left; }
+.op-todo-item, .op-todo-copy { background: transparent !important; box-shadow: none !important; }
+.op-todo-copy { width: 100%; padding: 0; border: 0; text-align: left; }
+.op-todo-inline-editor, .op-text-card-inline-editor { width: 100%; border-color: var(--interactive-accent); background: var(--background-primary); color: var(--text-normal); }
+.op-text-card-inline-editor { min-height: 160px; resize: vertical; font-family: var(--font-monospace); }
 .op-todo-copy > span { overflow-wrap: anywhere; color: var(--text-normal); font-size: 11px; }
 .op-todo-copy small { overflow: hidden; color: var(--text-faint); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -2422,6 +2435,7 @@
 	.op-template-catalog-list { border-right: 0; border-bottom: 1px solid var(--background-modifier-border); padding: 0 0 12px; }
 	.op-workflow-canvas { grid-template-columns: 1fr; }
 	.op-dashboard-workspace { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
+	.op-dashboard-card { grid-column: auto / span 1 !important; grid-row: auto / span var(--op-dashboard-row-span, 1) !important; }
 	.op-personal-shell,
 	.op-personal-shell.is-sidebar-open { grid-template-columns: 1fr; }
 	.op-personal-sidebar { position: static; max-height: none; }

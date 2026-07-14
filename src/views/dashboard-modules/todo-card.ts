@@ -1,7 +1,7 @@
 import { Notice } from 'obsidian';
 import type { TodoDashboardModuleConfig } from '../../domain/types';
 import { createModuleBody, renderModuleMessage } from './card-ui';
-import { collectIncompleteTodos, isTodoPathInScope, setMarkdownTodoCompleted } from './todo-model';
+import { collectIncompleteTodos, isTodoPathInScope, setMarkdownTodoCompleted, setMarkdownTodoText } from './todo-model';
 import { renderTodoSettings } from './module-settings';
 import type { DashboardModuleDefinition, DashboardModuleRenderContext } from './types';
 
@@ -28,7 +28,49 @@ async function renderTodo(context: DashboardModuleRenderContext): Promise<void> 
 		copy.createSpan({ text: todo.text });
 		if (config.showSource) copy.createEl('small', { text: `${todo.path} · 第 ${todo.line} 行` });
 		if (file) {
-			copy.addEventListener('click', () => void context.manager.app.workspace.getLeaf(false).openFile(file));
+			let openTimer: number | undefined;
+			copy.addEventListener('click', () => {
+				if (openTimer !== undefined) window.clearTimeout(openTimer);
+				openTimer = window.setTimeout(() => void context.manager.app.workspace.getLeaf(false).openFile(file), 220);
+			});
+			copy.addEventListener('dblclick', (event) => {
+				event.preventDefault();
+				if (openTimer !== undefined) window.clearTimeout(openTimer);
+				copy.hidden = true;
+				const input = row.createEl('input', { cls: 'op-todo-inline-editor', attr: { type: 'text', 'aria-label': '编辑待办内容' } });
+				input.value = todo.text;
+				input.focus();
+				input.select();
+				let finished = false;
+				const cancel = () => {
+					if (finished) return;
+					finished = true;
+					input.remove();
+					copy.hidden = false;
+				};
+				const save = async () => {
+					if (finished) return;
+					finished = true;
+					input.disabled = true;
+					try {
+						await context.manager.app.vault.process(file, (markdown) => setMarkdownTodoText(markdown, todo.line, todo.text, input.value));
+						context.refresh();
+					} catch (error) {
+						finished = false;
+						input.disabled = false;
+						input.focus();
+						new Notice(error instanceof Error ? error.message : String(error));
+					}
+				};
+				input.addEventListener('keydown', (keyEvent) => {
+					if (keyEvent.key === 'Escape') cancel();
+					else if (keyEvent.key === 'Enter') {
+						keyEvent.preventDefault();
+						void save();
+					}
+				});
+				input.addEventListener('blur', () => void save());
+			});
 			checkbox.addEventListener('change', () => {
 				checkbox.disabled = true;
 				void context.manager.app.vault.process(file, (markdown) => setMarkdownTodoCompleted(markdown, todo.line, checkbox.checked))

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	buildDirectoryTree,
 	collectNoteStatistics,
+	countFilteredFiles,
 	filterFilesByRoot,
 	filterFilesByScope,
 	formatRelativeTime,
@@ -104,6 +105,13 @@ describe('dashboard vault data', () => {
 		);
 		expect(stats.noteCount).toBe(1);
 		expect(stats.totalSize).toBe(12);
+	});
+
+	it('counts independent file metrics without reading file contents', () => {
+		expect(countFilteredFiles(files, 'Work', ['Work/Plans'], {
+			extensions: ['md'], metadataKey: 'status', metadataValue: 'active',
+			frontmatter: (file) => file.path === 'Work/Alpha.md' ? { status: 'active' } : undefined,
+		})).toBe(1);
 	});
 
 	it('sorts file card modes by creation, editing, and open frequency', () => {

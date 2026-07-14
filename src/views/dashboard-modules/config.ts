@@ -63,6 +63,11 @@ function normalizedDirectoryPaths(value: unknown): string[] {
 		.filter(Boolean);
 }
 
+function normalizedExtensions(value: unknown): string[] {
+	const extensions = [...new Set(normalizedPaths(value).map((extension) => extension.replace(/^\./u, '').toLowerCase()).filter(Boolean))];
+	return extensions.length > 0 ? extensions : ['md'];
+}
+
 function normalizedColor(value: unknown, fallback: string): string {
 	return typeof value === 'string' && /^#[0-9a-f]{6}$/iu.test(value.trim()) ? value.trim().toLowerCase() : fallback;
 }
@@ -113,9 +118,7 @@ export function normalizeDashboardModuleConfig(kind: DashboardModuleKind, value:
 		rootPath: typeof source.rootPath === 'string' ? source.rootPath.trim().replace(/^\/+|\/+$/gu, '') : '',
 		excludePaths: normalizedDirectoryPaths(source.excludePaths),
 		topFolderLimit: boundedNumber(source.topFolderLimit, 5, 1, 12),
-		extensions: [...new Set(normalizedPaths(source.extensions).map((extension) => extension.replace(/^\./u, '').toLowerCase()).filter(Boolean))].length > 0
-			? [...new Set(normalizedPaths(source.extensions).map((extension) => extension.replace(/^\./u, '').toLowerCase()).filter(Boolean))]
-			: ['md'],
+		extensions: normalizedExtensions(source.extensions),
 		metadataKey: typeof source.metadataKey === 'string' ? source.metadataKey.trim() : '',
 		metadataValue: typeof source.metadataValue === 'string' ? source.metadataValue.trim() : '',
 		displayFields: Array.isArray(source.displayFields)
@@ -123,6 +126,18 @@ export function normalizeDashboardModuleConfig(kind: DashboardModuleKind, value:
 				typeof field === 'string' && NOTE_STATS_FIELDS.has(field),
 			))]
 			: ['noteCount', 'characterCount', 'folderCount', 'topFolders'],
+		fileCountMetrics: Array.isArray(source.fileCountMetrics) ? source.fileCountMetrics.map((value, index) => {
+			const metric = objectValue(value);
+			return {
+				id: typeof metric.id === 'string' && metric.id.trim() ? metric.id.trim() : `metric-${index + 1}`,
+				name: typeof metric.name === 'string' && metric.name.trim() ? metric.name.trim() : `文件数量 ${index + 1}`,
+				rootPath: typeof metric.rootPath === 'string' ? metric.rootPath.trim().replace(/^\/+|\/+$/gu, '') : '',
+				excludePaths: normalizedDirectoryPaths(metric.excludePaths),
+				extensions: normalizedExtensions(metric.extensions),
+				metadataKey: typeof metric.metadataKey === 'string' ? metric.metadataKey.trim() : '',
+				metadataValue: typeof metric.metadataValue === 'string' ? metric.metadataValue.trim() : '',
+			};
+		}) : [],
 	} satisfies NoteStatsDashboardModuleConfig;
 	if (kind === 'recent-files') return {
 		rootPath: typeof source.rootPath === 'string' ? source.rootPath.trim().replace(/^\/+|\/+$/gu, '') : '',

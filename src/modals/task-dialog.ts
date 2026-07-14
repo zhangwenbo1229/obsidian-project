@@ -1,6 +1,9 @@
+import type { FieldPresentation } from '../views/field-presentation';
+import { applyLabelPresentation } from '../views/field-presentation';
+
 export interface TaskDialogShell {
 	gridEl: HTMLElement;
-	createSection(title: string, className?: string): HTMLElement;
+	createSection(title: string, className?: string, presentation?: FieldPresentation): HTMLElement;
 	footerEl: HTMLElement;
 }
 
@@ -20,11 +23,12 @@ export function buildTaskDialogShell(
 
 	return {
 		gridEl,
-		createSection(title, className) {
+		createSection(title, className, presentation) {
 			const sectionEl = gridEl.createDiv({
 				cls: ['op-task-dialog-section', className].filter(Boolean).join(' '),
 			});
-			sectionEl.createEl('h3', { text: title });
+			const heading = sectionEl.createEl('h3', { text: title });
+			applyLabelPresentation(heading, presentation);
 			return sectionEl.createDiv({ cls: 'op-task-dialog-section-body' });
 		},
 		footerEl,

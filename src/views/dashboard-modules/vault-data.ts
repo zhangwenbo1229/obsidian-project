@@ -23,6 +23,25 @@ export interface NoteStatisticsFilter<T extends DashboardVaultFile> {
 	frontmatter: (file: T) => Record<string, unknown> | undefined;
 }
 
+function matchesNoteFilter<T extends DashboardVaultFile>(file: T, filter: NoteStatisticsFilter<T>): boolean {
+	const extension = file.path.includes('.') ? file.path.split('.').at(-1)?.toLowerCase() ?? '' : '';
+	if (filter.extensions.length > 0 && !filter.extensions.includes(extension)) return false;
+	if (!filter.metadataKey) return true;
+	const value = filter.frontmatter(file)?.[filter.metadataKey];
+	if (value === undefined) return false;
+	if (!filter.metadataValue) return true;
+	const matches = (item: unknown) => typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean'
+		? String(item) === filter.metadataValue
+		: false;
+	return Array.isArray(value) ? value.some(matches) : matches(value);
+}
+
+export function countFilteredFiles<T extends DashboardVaultFile>(
+	files: readonly T[], rootPath: string, excludePaths: readonly string[], filter: NoteStatisticsFilter<T>,
+): number {
+	return filterFilesByScope(files, rootPath, excludePaths).filter((file) => matchesNoteFilter(file, filter)).length;
+}
+
 export interface DirectoryTreeNode {
 	name: string;
 	path: string;
@@ -88,19 +107,7 @@ export async function collectNoteStatistics<T extends DashboardVaultFile>(
 	excludePaths: readonly string[] = [],
 	filter?: NoteStatisticsFilter<T>,
 ): Promise<NoteStatistics> {
-	const selected = filterFilesByScope(files, rootPath, excludePaths).filter((file) => {
-		if (!filter) return true;
-		const extension = file.path.includes('.') ? file.path.split('.').at(-1)?.toLowerCase() ?? '' : '';
-		if (filter.extensions.length > 0 && !filter.extensions.includes(extension)) return false;
-		if (!filter.metadataKey) return true;
-		const value = filter.frontmatter(file)?.[filter.metadataKey];
-		if (value === undefined) return false;
-		if (!filter.metadataValue) return true;
-		const matches = (item: unknown) => typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean'
-			? String(item) === filter.metadataValue
-			: false;
-		return Array.isArray(value) ? value.some(matches) : matches(value);
-	});
+	const selected = filterFilesByScope(files, rootPath, excludePaths).filter((file) => !filter || matchesNoteFilter(file, filter));
 	const contents = await Promise.all(selected.map((file) => read(file)));
 	const folders = new Set<string>();
 	const topFolders = new Map<string, number>();

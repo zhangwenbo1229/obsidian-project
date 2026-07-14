@@ -19,10 +19,10 @@ describe('task dialog layout', () => {
 	});
 
 	it('uses date-time scheduling controls and a responsive two-column custom field grid', () => {
-		expect(createSource).toMatch(/setName\('开始日期'\)[\s\S]{0,220}inputEl\.type = 'datetime-local'/u);
-		expect(createSource).toMatch(/setName\('计划完成日期'\)[\s\S]{0,220}inputEl\.type = 'datetime-local'/u);
-		expect(editSource).toMatch(/setName\('开始日期'\)[\s\S]{0,220}inputEl\.type = 'datetime-local'/u);
-		expect(editSource).toMatch(/setName\('计划完成日期'\)[\s\S]{0,220}inputEl\.type = 'datetime-local'/u);
+		expect(createSource).toMatch(/fieldSetting\(planningEl, '开始日期',[\s\S]{0,220}inputEl\.type = 'datetime-local'/u);
+		expect(createSource).toMatch(/fieldSetting\(planningEl, '计划完成日期',[\s\S]{0,220}inputEl\.type = 'datetime-local'/u);
+		expect(editSource).toMatch(/fieldSetting\(planningEl, '开始日期',[\s\S]{0,220}inputEl\.type = 'datetime-local'/u);
+		expect(editSource).toMatch(/fieldSetting\(planningEl, '计划完成日期',[\s\S]{0,220}inputEl\.type = 'datetime-local'/u);
 		expect(createSource).toContain('op-task-custom-fields');
 		expect(editSource).toContain('op-task-custom-fields');
 		expect(css).toMatch(/\.op-task-custom-fields\s*\{[^}]*grid-template-columns:\s*repeat\(2/u);

@@ -44,6 +44,10 @@ export function normalizeTaskFieldConfig(value?: TaskFieldConfig | null): Record
 			enabled: configured?.enabled ?? true,
 			required: configured?.required ?? false,
 			defaultValue: configured?.defaultValue ?? defaultValue(field),
+			icon: configured?.icon?.trim() || undefined,
+			color: configured?.color && /^#[0-9a-f]{6}$/iu.test(configured.color.trim())
+				? configured.color.trim().toLowerCase()
+				: undefined,
 		}];
 	})) as Record<TaskFormField, TaskFieldRule>;
 }

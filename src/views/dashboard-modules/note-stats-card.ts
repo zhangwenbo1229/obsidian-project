@@ -3,7 +3,7 @@ import type { NoteStatsDashboardModuleConfig } from '../../domain/types';
 import { createModuleBody, formatCompactNumber, renderModuleMessage } from './card-ui';
 import { renderNoteStatsSettings } from './module-settings';
 import type { DashboardModuleDefinition, DashboardModuleRenderContext } from './types';
-import { collectNoteStatistics } from './vault-data';
+import { collectNoteStatistics, countFilteredFiles } from './vault-data';
 
 async function renderNoteStats(context: DashboardModuleRenderContext): Promise<void> {
 	const body = createModuleBody(context.container, 'op-note-stats-card');
@@ -26,6 +26,18 @@ async function renderNoteStats(context: DashboardModuleRenderContext): Promise<v
 	if (!context.isCurrent()) return;
 	body.empty();
 	const grid = body.createDiv({ cls: 'op-note-stats-grid' });
+	for (const metric of config.fileCountMetrics) {
+		const tile = grid.createDiv({ cls: 'op-note-stats-tile' });
+		const icon = tile.createSpan({ cls: 'op-note-stats-icon' });
+		setIcon(icon, 'files');
+		tile.createEl('strong', { text: formatCompactNumber(countFilteredFiles(files, metric.rootPath, metric.excludePaths, {
+			extensions: metric.extensions,
+			metadataKey: metric.metadataKey,
+			metadataValue: metric.metadataValue,
+			frontmatter: (file) => context.manager.app.metadataCache.getFileCache(file)?.frontmatter,
+		})) });
+		tile.createSpan({ text: metric.name });
+	}
 	const tiles = {
 		noteCount: { label: '文件', value: stats.noteCount, icon: 'notebook-tabs' },
 		characterCount: { label: '字符', value: stats.characterCount, icon: 'text-cursor-input' },

@@ -153,6 +153,52 @@ export function renderNoteStatsSettings(context: DashboardModuleSettingsContext)
 		context.update(config);
 	};
 	section(context.container, '统计范围', '留空根目录会统计整个库，文件后缀和元数据筛选只应用于当前卡片。');
+	new Setting(context.container).setName('独立文件数量').setDesc('每个指标可使用不同目录、排除项、后缀和元数据筛选。').setHeading();
+	const metricsContainer = context.container.createDiv({ cls: 'op-note-count-metrics' });
+	const renderMetric = (metric: NoteStatsDashboardModuleConfig['fileCountMetrics'][number]) => {
+		const group = metricsContainer.createDiv({ cls: 'op-note-count-metric-settings' });
+		new Setting(group).setName(metric.name)
+			.addText((text) => text.setPlaceholder('指标名称').setValue(metric.name).onChange((name) => {
+				metric.name = name;
+				update({ fileCountMetrics: [...config.fileCountMetrics] });
+			}))
+			.addExtraButton((button) => button.setIcon('trash-2').setTooltip('删除指标').onClick(() => {
+				update({ fileCountMetrics: config.fileCountMetrics.filter((item) => item.id !== metric.id) });
+				group.remove();
+			}));
+		new Setting(group).setName('根目录').addText((text) => text.setValue(metric.rootPath).onChange((rootPath) => {
+			metric.rootPath = rootPath;
+			update({ fileCountMetrics: [...config.fileCountMetrics] });
+		}));
+		new Setting(group).setName('排除目录').addTextArea((area) => area.setValue(metric.excludePaths.join('\n')).onChange((value) => {
+			metric.excludePaths = value.split(/\r?\n/u).map((item) => item.trim()).filter(Boolean);
+			update({ fileCountMetrics: [...config.fileCountMetrics] });
+		}));
+		new Setting(group).setName('文件后缀').addText((text) => text.setValue(metric.extensions.join(', ')).onChange((value) => {
+			metric.extensions = value.split(/[,，]/u).map((item) => item.trim()).filter(Boolean);
+			update({ fileCountMetrics: [...config.fileCountMetrics] });
+		}));
+		new Setting(group).setName('元数据筛选')
+			.addText((text) => text.setPlaceholder('属性').setValue(metric.metadataKey).onChange((metadataKey) => {
+				metric.metadataKey = metadataKey;
+				update({ fileCountMetrics: [...config.fileCountMetrics] });
+			}))
+			.addText((text) => text.setPlaceholder('值（可留空）').setValue(metric.metadataValue).onChange((metadataValue) => {
+				metric.metadataValue = metadataValue;
+				update({ fileCountMetrics: [...config.fileCountMetrics] });
+			}));
+	};
+	for (const metric of config.fileCountMetrics) renderMetric(metric);
+	new Setting(context.container).addButton((button) => button.setButtonText('新增文件数量指标').setIcon('plus').onClick(() => {
+		const index = config.fileCountMetrics.length + 1;
+		const metric = {
+			id: `metric-${Date.now()}`,
+			name: `文件数量 ${index}`,
+			rootPath: '', excludePaths: [], extensions: ['md'], metadataKey: '', metadataValue: '',
+		};
+		update({ fileCountMetrics: [...config.fileCountMetrics, metric] });
+		renderMetric(metric);
+	}));
 	new Setting(context.container).setName('根目录').addText((text) => text
 		.setPlaceholder('例如：笔记/工作')
 		.setValue(config.rootPath)

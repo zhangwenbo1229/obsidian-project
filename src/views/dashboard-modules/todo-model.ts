@@ -48,3 +48,17 @@ export function setMarkdownTodoCompleted(markdown: string, lineNumber: number, c
 	lines[index] = line.replace(/^(\s*[-*+]\s+)\[[ xX]\]/u, `$1[${completed ? 'x' : ' '}]`);
 	return lines.join('');
 }
+
+export function setMarkdownTodoText(markdown: string, lineNumber: number, expectedText: string, nextText: string): string {
+	const replacement = nextText.trim();
+	if (!replacement) throw new Error('待办内容不能为空。');
+	const lines = markdown.match(/.*(?:\r\n|\n|\r|$)/gu)?.filter((line) => line.length > 0) ?? [];
+	const index = lineNumber - 1;
+	if (index < 0 || index >= lines.length) throw new Error('待办所在行不存在，笔记可能已被修改。');
+	const line = lines[index]!;
+	const match = /^(\s*[-*+]\s+\[[ xX]\]\s+)(.*?)(\s*)(\r\n|\n|\r|$)$/u.exec(line);
+	if (!match) throw new Error('待办所在行不再是 Markdown 任务。');
+	if (match[2] !== expectedText) throw new Error('待办内容已被修改，请刷新后重试。');
+	lines[index] = `${match[1]}${replacement}${match[3]}${match[4]}`;
+	return lines.join('');
+}

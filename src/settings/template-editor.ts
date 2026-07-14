@@ -27,6 +27,13 @@ function customDefaultText(value: unknown): string {
 	return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' ? String(value) : '';
 }
 
+function addCustomFieldOption(template: TaskConfigurationTemplate, fieldId: string): void {
+	const field = template.customFields.find((item) => item.id === fieldId);
+	if (!field) return;
+	const index = (field.options?.length ?? 0) + 1;
+	field.options = [...(field.options ?? []), { id: `option-${index}`, name: `选项 ${index}` }];
+}
+
 function newTemplate(): TaskConfigurationTemplate {
 	return {
 		id: createUuid(),
@@ -144,6 +151,20 @@ export class TemplateSettingsEditor {
 					template.customFields = template.customFields.filter((item) => item !== field);
 					this.mount(root);
 				}));
+			new Setting(detail).setName(`${field.name}样式`)
+				.setDesc(field.icon ? `图标：${field.icon}` : '未设置图标')
+				.addButton((button) => button.setButtonText('选择图标').onClick(() => {
+					new TaskMarkerPickerModal(this.manager.app, field.icon ?? '', (icon) => {
+						field.icon = icon;
+						this.mount(root);
+					}).open();
+				}))
+				.addColorPicker((picker) => picker.setValue(field.color ?? '#626f86').onChange((color) => (field.color = color)))
+				.addExtraButton((button) => button.setIcon('rotate-ccw').setTooltip('清除样式').onClick(() => {
+					field.icon = undefined;
+					field.color = undefined;
+					this.mount(root);
+				}));
 			const fieldOptions = new Setting(detail).setName(`${field.name}配置`);
 			if (field.type === 'boolean') {
 				fieldOptions.addToggle((toggle) => toggle.setTooltip('默认值').setValue(Boolean(field.default)).onChange((value) => (field.default = value)));
@@ -153,17 +174,19 @@ export class TemplateSettingsEditor {
 				}));
 			}
 			if (field.type === 'single-select' || field.type === 'multi-select') {
-				fieldOptions.addTextArea((area) => area
-					.setPlaceholder('每行：选项ID:显示名称')
-					.setValue((field.options ?? []).map((option) => `${option.id}:${option.name}`).join('\n'))
-					.onChange((value) => {
-						field.options = value.split(/\r?\n/u).map((line) => line.trim()).filter(Boolean).map((line, index) => {
-							const separator = line.indexOf(':');
-							return separator < 0
-								? { id: `option-${index + 1}`, name: line }
-								: { id: line.slice(0, separator).trim(), name: line.slice(separator + 1).trim() };
-						});
-					}));
+				for (const option of field.options ?? []) {
+					new Setting(detail).setName('选项')
+						.addText((text) => text.setPlaceholder('选项 ID').setValue(option.id).onChange((id) => (option.id = id.trim())))
+						.addText((text) => text.setPlaceholder('显示名称').setValue(option.name).onChange((name) => (option.name = name)))
+						.addExtraButton((button) => button.setIcon('trash-2').setTooltip('删除选项').onClick(() => {
+							field.options = field.options?.filter((item) => item !== option);
+							this.mount(root);
+						}));
+				}
+				new Setting(detail).addButton((button) => button.setButtonText('新增选项').setIcon('plus').onClick(() => {
+					addCustomFieldOption(template, field.id);
+					this.mount(root);
+				}));
 			}
 		}
 		new Setting(detail).addButton((button) => button.setButtonText('新增自定义字段').onClick(() => {

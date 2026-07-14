@@ -1,14 +1,21 @@
 import { Modal, Notice, Setting } from 'obsidian';
-import type { ProjectConfig, TaskPriority, TaskRelation } from '../domain/types';
+import type { ProjectConfig, TaskFormField, TaskPriority, TaskRelation, TaskTypeDefinition } from '../domain/types';
 import type { ProjectManager } from '../services/project-manager';
 import { resolveTaskTypeTemplate, switchTaskTypeDraft, switchTaskTypeFieldDrafts } from '../services/task-service';
 import { fromDateTimeLocalInput, toDateTimeLocalInput } from '../utils/dates';
 import { buildTaskDialogShell } from './task-dialog';
 import { renderMarkdownEditor, type MarkdownEditorHandle } from './markdown-editor';
 import { createUuid } from '../utils/ids';
-import { taskFieldDefault, taskFieldEnabled } from '../settings/task-field-configuration';
+import { taskFieldDefault, taskFieldEnabled, taskFieldRule } from '../settings/task-field-configuration';
 import { validateConfiguredTaskFields } from '../services/task-field-validation';
 import { renderGroupedTagPicker } from './grouped-tag-picker';
+import { applyFieldPresentation } from '../views/field-presentation';
+
+function fieldSetting(container: HTMLElement, name: string, type: TaskTypeDefinition | undefined, field: TaskFormField): Setting {
+	const setting = new Setting(container).setName(name);
+	applyFieldPresentation(setting, taskFieldRule(type, field));
+	return setting;
+}
 
 function displayValue(value: unknown): string {
 	return typeof value === 'string' || typeof value === 'number'
@@ -63,15 +70,16 @@ export class CreateTaskModal extends Modal {
 			subtitle: '填写任务信息并创建到所选项目。',
 		});
 		const taskType = this.currentTaskType();
+		const presentation = (field: TaskFormField) => taskFieldRule(taskType, field);
 		const identityEl = shell.createSection('基本信息');
 		const planningEl = shell.createSection('计划与人员');
-		const customEl = taskFieldEnabled(taskType, 'customFields') ? shell.createSection('自定义字段') : null;
+		const customEl = taskFieldEnabled(taskType, 'customFields') ? shell.createSection('自定义字段', undefined, presentation('customFields')) : null;
 		customEl?.addClass('op-task-custom-fields');
-		const bodyEl = taskFieldEnabled(taskType, 'body') ? shell.createSection('任务正文', 'op-task-dialog-section-wide') : null;
-		const linksEl = taskFieldEnabled(taskType, 'links') ? shell.createSection('链接', 'op-task-dialog-section-wide') : null;
-		const subtasksEl = taskFieldEnabled(taskType, 'subtasks') ? shell.createSection('子任务', 'op-task-dialog-section-wide') : null;
-		const relationsEl = taskFieldEnabled(taskType, 'relations') ? shell.createSection('任务关系', 'op-task-dialog-section-wide') : null;
-		const notesEl = taskFieldEnabled(taskType, 'notes') ? shell.createSection('备注', 'op-task-dialog-section-wide') : null;
+		const bodyEl = taskFieldEnabled(taskType, 'body') ? shell.createSection('任务正文', 'op-task-dialog-section-wide', presentation('body')) : null;
+		const linksEl = taskFieldEnabled(taskType, 'links') ? shell.createSection('链接', 'op-task-dialog-section-wide', presentation('links')) : null;
+		const subtasksEl = taskFieldEnabled(taskType, 'subtasks') ? shell.createSection('子任务', 'op-task-dialog-section-wide', presentation('subtasks')) : null;
+		const relationsEl = taskFieldEnabled(taskType, 'relations') ? shell.createSection('任务关系', 'op-task-dialog-section-wide', presentation('relations')) : null;
+		const notesEl = taskFieldEnabled(taskType, 'notes') ? shell.createSection('备注', 'op-task-dialog-section-wide', presentation('notes')) : null;
 
 		new Setting(identityEl).setName('项目').addDropdown((dropdown) => {
 			for (const project of this.manager.projects.filter((item) => item.active)) {
@@ -111,31 +119,31 @@ export class CreateTaskModal extends Modal {
 				this.render();
 			});
 		});
-		if (taskFieldEnabled(taskType, 'priority')) new Setting(identityEl).setName('优先级').addDropdown((dropdown) => dropdown
+		if (taskFieldEnabled(taskType, 'priority')) fieldSetting(identityEl, '优先级', taskType, 'priority').addDropdown((dropdown) => dropdown
 			.addOption('high', '高')
 			.addOption('medium', '中')
 			.addOption('low', '低')
 			.setValue(this.priority)
 			.onChange((value) => (this.priority = value as TaskPriority)));
-		if (taskFieldEnabled(taskType, 'title')) new Setting(identityEl).setName('标题').addText((text) =>
+		if (taskFieldEnabled(taskType, 'title')) fieldSetting(identityEl, '标题', taskType, 'title').addText((text) =>
 			text.setValue(this.title).onChange((value) => (this.title = value)),
 		);
-		if (taskFieldEnabled(taskType, 'reporter')) new Setting(planningEl).setName('提报人').addDropdown((dropdown) => {
+		if (taskFieldEnabled(taskType, 'reporter')) fieldSetting(planningEl, '提报人', taskType, 'reporter').addDropdown((dropdown) => {
 			for (const person of this.manager.globalConfig.people.filter((item) => item.active)) dropdown.addOption(person.id, person.name);
 			dropdown.setValue(this.reporterId).onChange((value) => (this.reporterId = value));
 		});
-		if (taskFieldEnabled(taskType, 'assignee')) new Setting(planningEl).setName('经办人').addDropdown((dropdown) => {
+		if (taskFieldEnabled(taskType, 'assignee')) fieldSetting(planningEl, '经办人', taskType, 'assignee').addDropdown((dropdown) => {
 			dropdown.addOption('', '未分配');
 			for (const person of this.manager.globalConfig.people.filter((item) => item.active)) {
 				dropdown.addOption(person.id, person.name);
 			}
 			dropdown.setValue(this.assigneeId ?? '').onChange((value) => (this.assigneeId = value || null));
 		});
-		if (taskFieldEnabled(taskType, 'startDate')) new Setting(planningEl).setName('开始日期').addText((text) => {
+		if (taskFieldEnabled(taskType, 'startDate')) fieldSetting(planningEl, '开始日期', taskType, 'startDate').addText((text) => {
 			text.inputEl.type = 'datetime-local';
 			text.setValue(toDateTimeLocalInput(this.startDate)).onChange((value) => (this.startDate = fromDateTimeLocalInput(value)));
 		});
-		if (taskFieldEnabled(taskType, 'dueDate')) new Setting(planningEl).setName('计划完成日期').addText((text) => {
+		if (taskFieldEnabled(taskType, 'dueDate')) fieldSetting(planningEl, '计划完成日期', taskType, 'dueDate').addText((text) => {
 			text.inputEl.type = 'datetime-local';
 			text.setValue(toDateTimeLocalInput(this.dueDate)).onChange((value) => (this.dueDate = fromDateTimeLocalInput(value)));
 		});
@@ -144,9 +152,11 @@ export class CreateTaskModal extends Modal {
 			this.manager,
 			this.tags,
 			(tags) => (this.tags = tags),
+			presentation('tags'),
 		);
 		for (const field of customEl ? this.project?.customFields.filter((item) => item.active && (!item.taskTypeIds || item.taskTypeIds.includes(this.taskTypeId))) ?? [] : []) {
 			const setting = new Setting(customEl!).setName(field.name);
+			applyFieldPresentation(setting, field);
 			if (field.type === 'boolean') {
 				setting.addToggle((toggle) => toggle.setValue(Boolean(this.custom[field.key] ?? field.default)).onChange((value) => (this.custom[field.key] = value)));
 			} else if (field.type === 'single-select') {

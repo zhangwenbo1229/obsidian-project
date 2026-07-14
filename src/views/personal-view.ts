@@ -15,7 +15,7 @@ import {
 	deleteDashboardCard,
 	duplicateDashboardCard,
 	defaultDashboardCardBackground,
-	reorderDashboardCards,
+	moveDashboardCard,
 	resizeDashboardCard,
 } from './dashboard-layout';
 import { restoreProjectFilter } from './saved-project-filters';
@@ -80,6 +80,22 @@ export class PersonalView extends ItemView {
 		workspace.addEventListener('contextmenu', (event) => {
 			if (event.target === workspace) this.openWorkspaceMenu(event);
 		});
+		workspace.addEventListener('dragover', (event) => event.preventDefault());
+		workspace.addEventListener('drop', (event) => {
+			event.preventDefault();
+			const dragged = event.dataTransfer?.getData('text/plain');
+			if (!dragged) return;
+			const bounds = workspace.getBoundingClientRect();
+			const computed = getComputedStyle(workspace);
+			const gap = Number.parseFloat(computed.columnGap) || 0;
+			const columnUnit = (workspace.clientWidth + gap) / 8;
+			const rowUnit = 112 + (Number.parseFloat(computed.rowGap) || 0);
+			const column = Math.floor((event.clientX - bounds.left) / columnUnit) + 1;
+			const row = Math.floor((event.clientY - bounds.top) / rowUnit) + 1;
+			void this.manager.savePersonalDashboardLayout(moveDashboardCard(
+				this.manager.personalDashboardLayout, dragged, column, row,
+			)).then(() => this.render());
+		});
 		for (const card of this.manager.personalDashboardLayout) {
 			const tasks = this.tasksForCard(card, allTasks);
 			const cardEl = workspace.createDiv({ cls: 'op-dashboard-card' });
@@ -88,20 +104,13 @@ export class PersonalView extends ItemView {
 			cardEl.dataset.rowSpan = String(card.rowSpan);
 			cardEl.dataset.kind = card.kind;
 			cardEl.draggable = true;
-			cardEl.style.gridColumn = `span ${card.columnSpan}`;
-			cardEl.style.gridRow = `span ${card.rowSpan}`;
+			cardEl.style.gridColumn = card.columnStart ? `${card.columnStart} / span ${card.columnSpan}` : `span ${card.columnSpan}`;
+			cardEl.style.gridRow = card.rowStart ? `${card.rowStart} / span ${card.rowSpan}` : `span ${card.rowSpan}`;
 			cardEl.style.minHeight = `${card.rowSpan * 112}px`;
+			cardEl.style.setProperty('--op-dashboard-row-span', String(card.rowSpan));
 			cardEl.style.setProperty('--op-dashboard-card-background', card.backgroundColor ?? defaultDashboardCardBackground(card.metric, card.kind));
+			cardEl.style.setProperty('--op-dashboard-card-font-size', `${card.fontSize ?? 14}px`);
 			cardEl.addEventListener('dragstart', (event) => event.dataTransfer?.setData('text/plain', card.id));
-			cardEl.addEventListener('dragover', (event) => event.preventDefault());
-			cardEl.addEventListener('drop', (event) => {
-				event.preventDefault();
-				const dragged = event.dataTransfer?.getData('text/plain');
-				if (!dragged || dragged === card.id) return;
-				void this.manager.savePersonalDashboardLayout(
-					reorderDashboardCards(this.manager.personalDashboardLayout, dragged, card.id),
-				).then(() => this.render());
-			});
 			cardEl.addEventListener('contextmenu', (event) => this.openFilterMenu(event, card));
 			this.attachResizeHandle(cardEl, card, workspace);
 			this.renderDashboardCard(cardEl, card, tasks, today, generation);
@@ -162,8 +171,12 @@ export class PersonalView extends ItemView {
 			'completion-rate': stats.completionRate,
 			'overdue-rate': stats.incomplete === 0 ? 0 : stats.overdue / stats.incomplete,
 		};
-		const rawValue = card.kind === 'percentage' && card.percentageDataMode === 'manual'
-			? card.percentageCurrent! / card.percentageTarget!
+		const rawValue = card.kind === 'percentage'
+			? card.percentageDataMode === 'manual'
+				? card.percentageCurrent! / card.percentageTarget!
+				: card.percentageDataMode === 'direct'
+					? (card.percentageValue ?? 0) / 100
+					: values[card.metric]
 			: values[card.metric];
 		const text = card.kind === 'percentage' ? `${Math.round(rawValue * 100)}%` : String(rawValue);
 		if (card.kind === 'percentage' && card.percentageDisplay === 'progress') {

@@ -7,6 +7,7 @@ const {
 	normalizeDashboardLayout,
 	reorderDashboardCards,
 	resizeDashboardCard,
+	moveDashboardCard,
 	updateDashboardCardPresentation,
 } = dashboardLayout;
 
@@ -19,7 +20,7 @@ describe('personal dashboard layout', () => {
 		const reordered = reorderDashboardCards(layout, 'pending-list', 'completed');
 		expect(reordered[0]?.id).toBe('pending-list');
 		const resized = resizeDashboardCard(reordered, 'pending-list', 9, 0);
-		expect(resized[0]).toMatchObject({ columnSpan: 4, rowSpan: 1 });
+		expect(resized[0]).toMatchObject({ columnSpan: 8, rowSpan: 1 });
 		const bound = bindDashboardFilter(resized, 'pending-list', 'filter-1');
 		expect(bound[0]?.filterId).toBe('filter-1');
 	const updatePresentation = (dashboardLayout as Record<string, unknown>).updateDashboardCardPresentation as undefined | ((
@@ -133,6 +134,33 @@ describe('personal dashboard layout', () => {
 			id: 'zero', kind: 'percentage', percentageTarget: 0,
 		}] as never[]).find((card) => card.id === 'zero');
 		expect(zero?.percentageTarget).toBe(100);
+	});
+
+	it('normalizes card font size and a direct percentage value', () => {
+		const cards = normalizeDashboardLayout([{
+			id: 'direct-percentage', kind: 'percentage', fontSize: 80,
+			percentageDataMode: 'direct', percentageValue: 135,
+		}] as never[]);
+		expect(cards.find((card) => card.id === 'direct-percentage')).toMatchObject({
+			fontSize: 28, percentageDataMode: 'direct', percentageValue: 100,
+		});
+		expect(normalizeDashboardLayout([])[0]?.fontSize).toBe(14);
+	});
+
+	it('stores an explicit collision-free position on an eight-column grid', () => {
+		const layout = normalizeDashboardLayout([{
+			id: 'free-card', order: 7, columnSpan: 1, rowSpan: 1, kind: 'number', metric: 'total', displayFields: [],
+		}] as never[]);
+		const moved = moveDashboardCard(layout, 'free-card', 8, 3);
+		expect(moved.find((card) => card.id === 'free-card')).toMatchObject({ columnStart: 8, rowStart: 3 });
+		const clamped = moveDashboardCard(moved, 'free-card', 99, -4);
+		expect(clamped.find((card) => card.id === 'free-card')).toMatchObject({ columnStart: 8, rowStart: 1 });
+		const second = normalizeDashboardLayout([...clamped, {
+			id: 'second-card', order: 8, columnSpan: 1, rowSpan: 1, columnStart: 8, rowStart: 1,
+			kind: 'number', metric: 'total', displayFields: [],
+		}] as never[]);
+		const collisionFree = moveDashboardCard(second, 'free-card', 8, 1);
+		expect(collisionFree.find((card) => card.id === 'free-card')?.rowStart).toBe(2);
 	});
 
 	it('duplicates any card with deep-copied configuration after its source', () => {
