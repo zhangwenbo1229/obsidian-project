@@ -8,16 +8,23 @@ import type { DashboardModuleDefinition } from './types';
 import { weatherDefinition } from './weather-card';
 import { textDefinition } from './text-card';
 import { chartDefinition } from './chart-card';
+import { countdownDefinition, dateDefinition } from './date-card';
+import { todoDefinition } from './todo-card';
+import { heatmapDefinition } from './heatmap-card';
 
 export const DASHBOARD_MODULE_DEFINITIONS: DashboardModuleDefinition[] = [
 	weatherDefinition,
 	calendarDefinition,
+	dateDefinition,
+	todoDefinition,
 	noteStatsDefinition,
 	recentFilesDefinition,
 	newsDefinition,
 	directoryDefinition,
 	textDefinition,
 	chartDefinition,
+	countdownDefinition,
+	heatmapDefinition,
 ];
 
 export function getDashboardModuleDefinition(kind: string): DashboardModuleDefinition | undefined {

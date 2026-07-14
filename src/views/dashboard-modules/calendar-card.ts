@@ -24,7 +24,14 @@ function renderMonth(body: HTMLElement, subtitle: HTMLElement, context: Dashboar
 	body.empty();
 	const config = context.card.moduleConfig as CalendarDashboardModuleConfig;
 	const cursor = currentCursor(context.card.id);
-	const model = buildCalendarMonth(cursor.year, cursor.month, localDate(), config.weekStartsOn, config.showLunar);
+	const model = buildCalendarMonth(
+		cursor.year,
+		cursor.month,
+		localDate(),
+		config.weekStartsOn,
+		config.showLunar,
+		config.showHolidays,
+	);
 	subtitle.setText(`${model.year} 年 ${model.month + 1} 月`);
 	const grid = body.createDiv({ cls: 'op-module-calendar-grid' });
 	for (const weekday of model.weekdays) grid.createDiv({ cls: 'op-module-calendar-weekday', text: weekday });

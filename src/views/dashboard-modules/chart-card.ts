@@ -12,55 +12,73 @@ function svgElement<K extends keyof SVGElementTagNameMap>(parent: SVGElement, ta
 	return element;
 }
 
-function renderLegend(container: HTMLElement, names: readonly string[]): void {
+function colorAt(config: ChartDashboardModuleConfig, index: number): string {
+	return config.seriesColors[index] ?? COLORS[index % COLORS.length]!;
+}
+
+function renderLegend(container: HTMLElement, names: readonly string[], config: ChartDashboardModuleConfig): void {
 	const legend = container.createDiv({ cls: 'op-chart-legend' });
+	legend.style.color = config.legendColor;
 	for (const [index, name] of names.entries()) {
 		const item = legend.createSpan();
-		item.createSpan({ cls: 'op-chart-legend-swatch', attr: { style: `--op-chart-color: ${COLORS[index % COLORS.length]}` } });
+		item.createSpan({ cls: 'op-chart-legend-swatch', attr: { style: `--op-chart-color: ${colorAt(config, index)}` } });
 		item.createSpan({ text: name });
 	}
 }
 
-function renderLineChart(svg: SVGSVGElement, data: ChartData): void {
+function renderDataLabel(svg: SVGSVGElement, x: number, y: number, value: number, config: ChartDashboardModuleConfig): void {
+	const label = svgElement(svg, 'text', { x, y, 'text-anchor': 'middle', class: 'op-chart-data-label', fill: config.dataLabelColor });
+	label.textContent = String(value);
+}
+
+function renderLineChart(svg: SVGSVGElement, data: ChartData, config: ChartDashboardModuleConfig): void {
 	const model = buildLineChart(data, 400, 220);
-	svgElement(svg, 'line', { x1: 40, y1: 170, x2: 380, y2: 170, class: 'op-chart-axis' });
+	if (config.showAxes) svgElement(svg, 'line', { x1: 40, y1: 170, x2: 380, y2: 170, class: 'op-chart-axis', stroke: config.axisColor });
 	for (const [seriesIndex, series] of model.series.entries()) {
 		svgElement(svg, 'polyline', {
 			points: series.points.map((point) => `${point.x},${point.y}`).join(' '),
-			fill: 'none', stroke: COLORS[seriesIndex % COLORS.length]!, class: 'op-chart-line',
+			fill: 'none', stroke: colorAt(config, seriesIndex), class: 'op-chart-line',
 		});
-		for (const point of series.points) svgElement(svg, 'circle', { cx: point.x, cy: point.y, r: 3.5, fill: COLORS[seriesIndex % COLORS.length]! });
+		for (const [pointIndex, point] of series.points.entries()) {
+			svgElement(svg, 'circle', { cx: point.x, cy: point.y, r: 3.5, fill: colorAt(config, seriesIndex) });
+			if (config.showDataLabels) renderDataLabel(svg, point.x, point.y - 8, data.series[seriesIndex]?.values[pointIndex] ?? 0, config);
+		}
 	}
-	renderXAxisLabels(svg, data.labels);
+	if (config.showAxes) renderXAxisLabels(svg, data.labels, config.axisColor);
 }
 
-function renderBarChart(svg: SVGSVGElement, data: ChartData): void {
+function renderBarChart(svg: SVGSVGElement, data: ChartData, config: ChartDashboardModuleConfig): void {
 	const model = buildBarChart(data, 400, 220);
-	svgElement(svg, 'line', { x1: 40, y1: 170, x2: 380, y2: 170, class: 'op-chart-axis' });
+	if (config.showAxes) svgElement(svg, 'line', { x1: 40, y1: 170, x2: 380, y2: 170, class: 'op-chart-axis', stroke: config.axisColor });
 	for (const bar of model.bars) {
 		svgElement(svg, 'rect', {
 			x: bar.x, y: bar.y, width: bar.width, height: Math.max(1, bar.height), rx: 2,
-			fill: COLORS[bar.seriesIndex % COLORS.length]!,
+			fill: colorAt(config, bar.seriesIndex),
 		});
+		if (config.showDataLabels) renderDataLabel(svg, bar.x + bar.width / 2, bar.y - 5, bar.value, config);
 	}
-	renderXAxisLabels(svg, data.labels);
+	if (config.showAxes) renderXAxisLabels(svg, data.labels, config.axisColor);
 }
 
-function renderXAxisLabels(svg: SVGSVGElement, labels: readonly string[]): void {
+function renderXAxisLabels(svg: SVGSVGElement, labels: readonly string[], color: string): void {
 	const plotWidth = 340;
 	for (const [index, label] of labels.entries()) {
 		const x = labels.length === 1 ? 210 : 40 + (index / (labels.length - 1)) * plotWidth;
-		const text = svgElement(svg, 'text', { x, y: 198, 'text-anchor': 'middle', class: 'op-chart-label' });
+		const text = svgElement(svg, 'text', { x, y: 198, 'text-anchor': 'middle', class: 'op-chart-label', fill: color });
 		text.textContent = label.length > 8 ? `${label.slice(0, 7)}…` : label;
 	}
 }
 
-function renderPieChart(svg: SVGSVGElement, data: ChartData): void {
+function renderPieChart(svg: SVGSVGElement, data: ChartData, config: ChartDashboardModuleConfig): void {
 	const model = buildPieChart(data, 200, 110, 82);
 	for (const [index, slice] of model.slices.entries()) {
-		const path = svgElement(svg, 'path', { d: slice.path, fill: COLORS[index % COLORS.length]!, class: 'op-chart-slice' });
+		const path = svgElement(svg, 'path', { d: slice.path, fill: colorAt(config, index), class: 'op-chart-slice' });
 		const title = svgElement(path, 'title', {});
 		title.textContent = `${slice.label}: ${slice.value} (${slice.percentage}%)`;
+		if (config.showDataLabels) {
+			const label = svgElement(svg, 'text', { x: 200, y: 18 + index * 13, class: 'op-chart-data-label', fill: config.dataLabelColor });
+			label.textContent = `${slice.label} ${slice.percentage}%`;
+		}
 	}
 }
 
@@ -73,10 +91,10 @@ function renderChart(context: DashboardModuleRenderContext): void {
 			cls: 'op-chart-svg',
 			attr: { viewBox: '0 0 400 220', role: 'img', 'aria-label': `${context.card.title ?? '图表'}：${config.chartType}` },
 		});
-		if (config.chartType === 'line') renderLineChart(svg, data);
-		else if (config.chartType === 'bar') renderBarChart(svg, data);
-		else renderPieChart(svg, data);
-		renderLegend(body, config.chartType === 'pie' ? data.labels : data.series.map((series) => series.name));
+		if (config.chartType === 'line') renderLineChart(svg, data, config);
+		else if (config.chartType === 'bar') renderBarChart(svg, data, config);
+		else renderPieChart(svg, data, config);
+		if (config.showLegend) renderLegend(body, config.chartType === 'pie' ? data.labels : data.series.map((series) => series.name), config);
 	} catch (error) {
 		renderModuleMessage(body, 'chart-no-axes-column', '图表数据无效', error instanceof Error ? error.message : String(error), 'op-dashboard-module-error');
 	}

@@ -198,7 +198,7 @@ export type CustomTaskDisplayField = `custom:${string}`;
 export type TaskDisplayField = BuiltInTaskDisplayField | CustomTaskDisplayField | 'customFields';
 
 export type PersonalDashboardCardId = string;
-export type DashboardModuleKind = 'weather' | 'calendar' | 'note-stats' | 'recent-files' | 'news' | 'directory' | 'text' | 'chart';
+export type DashboardModuleKind = 'weather' | 'calendar' | 'date' | 'todo' | 'note-stats' | 'recent-files' | 'news' | 'directory' | 'text' | 'chart' | 'countdown' | 'heatmap';
 export type DashboardCardKind = 'number' | 'percentage' | 'task-list' | DashboardModuleKind;
 export type DashboardMetric =
 	| 'total'
@@ -228,8 +228,6 @@ export interface PersonalDashboardCardLayout {
 export interface WeatherDashboardModuleConfig {
 	networkEnabled: boolean;
 	provider: WeatherProviderId;
-	apiKey: string;
-	apiHost: string;
 	locationName: string;
 	latitude: number;
 	longitude: number;
@@ -241,6 +239,7 @@ export type WeatherProviderId = 'open-meteo' | 'qweather' | 'openweathermap';
 
 export interface CalendarDashboardModuleConfig {
 	showLunar: boolean;
+	showHolidays: boolean;
 	weekStartsOn: 0 | 1;
 }
 
@@ -277,6 +276,42 @@ export type DashboardChartType = 'line' | 'bar' | 'pie';
 export interface ChartDashboardModuleConfig {
 	chartType: DashboardChartType;
 	csv: string;
+	showAxes: boolean;
+	showLegend: boolean;
+	showDataLabels: boolean;
+	axisColor: string;
+	legendColor: string;
+	dataLabelColor: string;
+	seriesColors: string[];
+}
+
+export interface DateDashboardModuleConfig {
+	showLunar: boolean;
+	showHoliday: boolean;
+	showTime: boolean;
+	showWeekday: boolean;
+	showSeconds: boolean;
+}
+
+export interface TodoDashboardModuleConfig {
+	rootPaths: string[];
+	excludePaths: string[];
+	limit: number;
+	showSource: boolean;
+}
+
+export interface CountdownDashboardModuleConfig {
+	targetDate: string;
+	eventName: string;
+	includeToday: boolean;
+	showTargetDate: boolean;
+}
+
+export interface HeatmapDashboardModuleConfig {
+	rootPaths: string[];
+	excludePaths: string[];
+	days: number;
+	color: string;
 }
 
 export type DashboardModuleConfig =
@@ -287,7 +322,11 @@ export type DashboardModuleConfig =
 	| NewsDashboardModuleConfig
 	| DirectoryDashboardModuleConfig
 	| TextDashboardModuleConfig
-	| ChartDashboardModuleConfig;
+	| ChartDashboardModuleConfig
+	| DateDashboardModuleConfig
+	| TodoDashboardModuleConfig
+	| CountdownDashboardModuleConfig
+	| HeatmapDashboardModuleConfig;
 
 export interface TaskMetadata {
 	kind: 'task';

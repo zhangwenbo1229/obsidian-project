@@ -252,7 +252,6 @@ export class PersonalView extends ItemView {
 			cls: 'op-dashboard-resize-handle',
 			attr: { 'aria-label': '调整卡片大小', title: '调整卡片大小', type: 'button' },
 		});
-		setIcon(handle, 'scaling');
 		handle.draggable = false;
 		handle.addEventListener('pointerdown', (event) => {
 			event.preventDefault();

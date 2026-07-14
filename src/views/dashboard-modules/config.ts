@@ -9,6 +9,10 @@ import type {
 	WeatherDashboardModuleConfig,
 	TextDashboardModuleConfig,
 	ChartDashboardModuleConfig,
+	DateDashboardModuleConfig,
+	TodoDashboardModuleConfig,
+	CountdownDashboardModuleConfig,
+	HeatmapDashboardModuleConfig,
 } from '../../domain/types';
 
 const WEATHER_PROVIDERS = new Set(['open-meteo', 'qweather', 'openweathermap']);
@@ -21,12 +25,16 @@ export const DASHBOARD_MODULE_CATALOG: Array<{
 }> = [
 	{ kind: 'weather', label: '天气', icon: 'cloud-sun', defaultSize: { columns: 2, rows: 2 } },
 	{ kind: 'calendar', label: '日历', icon: 'calendar-days', defaultSize: { columns: 2, rows: 3 } },
+	{ kind: 'date', label: '日期', icon: 'calendar-heart', defaultSize: { columns: 1, rows: 2 } },
+	{ kind: 'todo', label: '待办', icon: 'list-todo', defaultSize: { columns: 2, rows: 3 } },
 	{ kind: 'note-stats', label: '笔记统计', icon: 'chart-no-axes-column-increasing', defaultSize: { columns: 2, rows: 2 } },
 	{ kind: 'recent-files', label: '最近文件', icon: 'history', defaultSize: { columns: 2, rows: 3 } },
 	{ kind: 'news', label: '资讯', icon: 'newspaper', defaultSize: { columns: 2, rows: 3 } },
 	{ kind: 'directory', label: '目录', icon: 'folder-tree', defaultSize: { columns: 2, rows: 3 } },
 	{ kind: 'text', label: '文本', icon: 'notebook-pen', defaultSize: { columns: 2, rows: 2 } },
 	{ kind: 'chart', label: '图表', icon: 'chart-column', defaultSize: { columns: 2, rows: 3 } },
+	{ kind: 'countdown', label: '倒计日', icon: 'hourglass', defaultSize: { columns: 1, rows: 2 } },
+	{ kind: 'heatmap', label: '热力图', icon: 'grid-3x3', defaultSize: { columns: 3, rows: 2 } },
 ];
 
 export function isDashboardModuleKind(value: string): value is DashboardModuleKind {
@@ -54,6 +62,10 @@ function normalizedDirectoryPaths(value: unknown): string[] {
 		.filter(Boolean);
 }
 
+function normalizedColor(value: unknown, fallback: string): string {
+	return typeof value === 'string' && /^#[0-9a-f]{6}$/iu.test(value.trim()) ? value.trim().toLowerCase() : fallback;
+}
+
 function normalizedFeedUrls(value: unknown): string[] {
 	return normalizedPaths(value).filter((item) => {
 		try {
@@ -65,16 +77,6 @@ function normalizedFeedUrls(value: unknown): string[] {
 	});
 }
 
-function normalizedHttpsOrigin(value: unknown): string {
-	if (typeof value !== 'string' || !value.trim()) return '';
-	try {
-		const url = new URL(value.trim());
-		return url.protocol === 'https:' ? url.origin : '';
-	} catch {
-		return '';
-	}
-}
-
 export function normalizeDashboardModuleConfig(kind: DashboardModuleKind, value: unknown): DashboardModuleConfig {
 	const source = objectValue(value);
 	if (kind === 'weather') return {
@@ -82,8 +84,6 @@ export function normalizeDashboardModuleConfig(kind: DashboardModuleKind, value:
 		provider: typeof source.provider === 'string' && WEATHER_PROVIDERS.has(source.provider)
 			? source.provider as WeatherDashboardModuleConfig['provider']
 			: 'open-meteo',
-		apiKey: typeof source.apiKey === 'string' ? source.apiKey.trim() : '',
-		apiHost: normalizedHttpsOrigin(source.apiHost),
 		locationName: typeof source.locationName === 'string' && source.locationName.trim() ? source.locationName.trim() : '上海',
 		latitude: boundedNumber(source.latitude, 31.2304, -90, 90),
 		longitude: boundedNumber(source.longitude, 121.4737, -180, 180),
@@ -92,8 +92,22 @@ export function normalizeDashboardModuleConfig(kind: DashboardModuleKind, value:
 	} satisfies WeatherDashboardModuleConfig;
 	if (kind === 'calendar') return {
 		showLunar: source.showLunar !== false,
+		showHolidays: source.showHolidays !== false,
 		weekStartsOn: source.weekStartsOn === 0 ? 0 : 1,
 	} satisfies CalendarDashboardModuleConfig;
+	if (kind === 'date') return {
+		showLunar: source.showLunar !== false,
+		showHoliday: source.showHoliday !== false,
+		showTime: source.showTime !== false,
+		showWeekday: source.showWeekday !== false,
+		showSeconds: source.showSeconds !== false,
+	} satisfies DateDashboardModuleConfig;
+	if (kind === 'todo') return {
+		rootPaths: normalizedDirectoryPaths(source.rootPaths),
+		excludePaths: normalizedDirectoryPaths(source.excludePaths),
+		limit: boundedNumber(source.limit, 30, 1, 100),
+		showSource: source.showSource !== false,
+	} satisfies TodoDashboardModuleConfig;
 	if (kind === 'note-stats') return {
 		rootPath: typeof source.rootPath === 'string' ? source.rootPath.trim().replace(/^\/+|\/+$/gu, '') : '',
 		excludePaths: normalizedDirectoryPaths(source.excludePaths),
@@ -117,10 +131,33 @@ export function normalizeDashboardModuleConfig(kind: DashboardModuleKind, value:
 	if (kind === 'text') return {
 		markdown: typeof source.markdown === 'string' ? source.markdown : '## 文本卡片\n\n在设置中输入 Markdown 内容。',
 	} satisfies TextDashboardModuleConfig;
+	if (kind === 'countdown') return {
+		targetDate: typeof source.targetDate === 'string' && /^\d{4}-\d{2}-\d{2}$/u.test(source.targetDate)
+			? source.targetDate
+			: '',
+		eventName: typeof source.eventName === 'string' && source.eventName.trim() ? source.eventName.trim() : '目标日',
+		includeToday: source.includeToday === true,
+		showTargetDate: source.showTargetDate !== false,
+	} satisfies CountdownDashboardModuleConfig;
+	if (kind === 'heatmap') return {
+		rootPaths: normalizedDirectoryPaths(source.rootPaths),
+		excludePaths: normalizedDirectoryPaths(source.excludePaths),
+		days: source.days === 90 || source.days === 180 ? source.days : 365,
+		color: normalizedColor(source.color, '#22a06b'),
+	} satisfies HeatmapDashboardModuleConfig;
 	return {
 		chartType: source.chartType === 'bar' || source.chartType === 'pie' ? source.chartType : 'line',
 		csv: typeof source.csv === 'string' && source.csv.trim()
 			? source.csv.trim()
 			: '分类,计划,实际\n一月,10,8\n二月,12,11\n三月,9,13',
+		showAxes: source.showAxes !== false,
+		showLegend: source.showLegend !== false,
+		showDataLabels: source.showDataLabels === true,
+		axisColor: normalizedColor(source.axisColor, '#8590a2'),
+		legendColor: normalizedColor(source.legendColor, '#626f86'),
+		dataLabelColor: normalizedColor(source.dataLabelColor, '#44546f'),
+		seriesColors: Array.isArray(source.seriesColors)
+			? source.seriesColors.map((color, index) => normalizedColor(color, ['#0c66e4', '#22a06b', '#c25100'][index % 3]!)).slice(0, 8)
+			: ['#0c66e4', '#22a06b', '#c25100'],
 	} satisfies ChartDashboardModuleConfig;
 }

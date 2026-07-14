@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { createDashboardCard, normalizeDashboardLayout } from '../../src/views/dashboard-layout';
 import {
@@ -6,20 +7,19 @@ import {
 } from '../../src/views/dashboard-modules/config';
 
 describe('personal dashboard module configuration', () => {
-	it('catalogs all six modules with practical default card sizes', () => {
+	it('catalogs every module with practical default card sizes', () => {
 		expect(DASHBOARD_MODULE_CATALOG.map((item) => item.kind)).toEqual([
-			'weather', 'calendar', 'note-stats', 'recent-files', 'news', 'directory', 'text', 'chart',
+			'weather', 'calendar', 'date', 'todo', 'note-stats', 'recent-files', 'news', 'directory', 'text', 'chart',
+			'countdown', 'heatmap',
 		]);
 		expect(DASHBOARD_MODULE_CATALOG.find((item) => item.kind === 'calendar')?.defaultSize).toEqual({ columns: 2, rows: 3 });
 		expect(DASHBOARD_MODULE_CATALOG.find((item) => item.kind === 'weather')?.icon).toBe('cloud-sun');
 	});
 
 	it('normalizes safe defaults and keeps network modules disabled', () => {
-			expect(normalizeDashboardModuleConfig('weather', null)).toEqual({
+		expect(normalizeDashboardModuleConfig('weather', null)).toEqual({
 			networkEnabled: false,
 			provider: 'open-meteo',
-			apiKey: '',
-			apiHost: '',
 			locationName: '上海',
 			latitude: 31.2304,
 			longitude: 121.4737,
@@ -43,6 +43,27 @@ describe('personal dashboard module configuration', () => {
 		expect(normalizeDashboardModuleConfig('recent-files', { excludePaths: ['Templates'] })).toMatchObject({
 			excludePaths: ['Templates'],
 		});
+		expect(normalizeDashboardModuleConfig('calendar', {})).toEqual({
+			showLunar: true,
+			showHolidays: true,
+			weekStartsOn: 1,
+		});
+		expect(normalizeDashboardModuleConfig('date', {})).toEqual({
+			showLunar: true, showHoliday: true, showTime: true, showWeekday: true, showSeconds: true,
+		});
+		expect(normalizeDashboardModuleConfig('todo', { rootPaths: [' Work ', ''], excludePaths: ['Work/Archive'], limit: 999 })).toEqual({
+			rootPaths: ['Work'], excludePaths: ['Work/Archive'], limit: 100, showSource: true,
+		});
+		expect(normalizeDashboardModuleConfig('countdown', {})).toMatchObject({
+			eventName: '目标日', includeToday: false, showTargetDate: true,
+		});
+		expect(normalizeDashboardModuleConfig('heatmap', { days: 999, color: 'bad' })).toMatchObject({
+			days: 365, color: '#22a06b', rootPaths: [], excludePaths: [],
+		});
+		expect(normalizeDashboardModuleConfig('chart', {})).toMatchObject({
+			showAxes: true, showLegend: true, showDataLabels: false,
+			axisColor: '#8590a2', legendColor: '#626f86', dataLabelColor: '#44546f',
+		});
 	});
 
 	it('creates and migrates independently configured module cards', () => {
@@ -59,12 +80,17 @@ describe('personal dashboard module configuration', () => {
 			networkEnabled: true, latitude: 90, longitude: -180, forecastDays: 3, refreshMinutes: 10,
 		});
 		expect(normalizeDashboardModuleConfig('weather', { forecastDays: 99 })).toMatchObject({ forecastDays: 7 });
-		expect(normalizeDashboardModuleConfig('weather', {
-			provider: 'qweather', apiKey: ' secret ', apiHost: ' https://abc.re.qweatherapi.com/ ',
-		})).toMatchObject({
-			provider: 'qweather', apiKey: 'secret', apiHost: 'https://abc.re.qweatherapi.com',
+		const legacyWeather = normalizeDashboardModuleConfig('weather', {
+			provider: 'qweather', apiKey: ' legacy-secret ', apiHost: ' https://abc.re.qweatherapi.com/ ',
 		});
+		expect('apiKey' in legacyWeather).toBe(false);
+		expect('apiHost' in legacyWeather).toBe(false);
 		expect(normalizeDashboardModuleConfig('weather', { provider: 'invalid' })).toMatchObject({ provider: 'open-meteo' });
-		expect(normalizeDashboardModuleConfig('weather', { provider: 'qweather', apiHost: 'file:///secret' })).toMatchObject({ apiHost: '' });
+	});
+
+	it('keeps weather credentials out of per-card settings', () => {
+		const settings = readFileSync(new URL('../../src/views/dashboard-modules/module-settings.ts', import.meta.url), 'utf8');
+		expect(settings).not.toContain("setName('接口密钥')");
+		expect(settings).not.toContain("setName('接口主机')");
 	});
 });

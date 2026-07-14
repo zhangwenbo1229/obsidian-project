@@ -13,11 +13,23 @@ describe('dashboard calendar model', () => {
 	});
 
 	it('marks fixed holidays and can include a compact lunar label', () => {
-		const nationalDay = buildCalendarMonth(2026, 9, '2026-10-01', 1, true)
+		const nationalDay = buildCalendarMonth(2026, 9, '2026-10-01', 1, true, true)
 			.cells.find((cell) => cell.isoDate === '2026-10-01');
 		expect(nationalDay?.holiday).toBe('国庆');
 		expect(nationalDay?.lunarLabel).toBeTruthy();
 		expect(formatChineseLunarDay(new Date(2026, 9, 1))).not.toContain('年');
+		expect(formatChineseLunarDay(new Date(2026, 1, 17))).toMatch(/正月|初一/u);
+	});
+
+	it('controls lunar and holiday annotations independently', () => {
+		const hidden = buildCalendarMonth(2026, 9, '2026-10-01', 1, false, false)
+			.cells.find((cell) => cell.isoDate === '2026-10-01');
+		expect(hidden?.holiday).toBeUndefined();
+		expect(hidden?.lunarLabel).toBeUndefined();
+		const holidayOnly = buildCalendarMonth(2026, 9, '2026-10-01', 1, false, true)
+			.cells.find((cell) => cell.isoDate === '2026-10-01');
+		expect(holidayOnly?.holiday).toBe('国庆');
+		expect(holidayOnly?.lunarLabel).toBeUndefined();
 	});
 
 	it('supports Sunday as the first day of the week', () => {

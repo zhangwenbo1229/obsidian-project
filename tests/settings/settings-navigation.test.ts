@@ -5,6 +5,7 @@ describe('settings navigation', () => {
 	it('exposes the dedicated task template page', () => {
 		expect(SETTINGS_PAGES).toContain('templates');
 		expect(SETTINGS_PAGES).toContain('view-display');
+		expect(SETTINGS_PAGES).toContain('personal-dashboard');
 	});
 
 	it('opens project configuration inside settings and returns to the project list', () => {
@@ -17,6 +18,8 @@ describe('settings navigation', () => {
 		expect(navigation.page).toBe('templates');
 		navigation.open('view-display');
 		expect(navigation.page).toBe('view-display');
+		navigation.open('personal-dashboard');
+		expect(navigation.page).toBe('personal-dashboard');
 
 		navigation.openProject('project-uid');
 		expect(navigation.page).toBe('project-detail');

@@ -30,10 +30,14 @@ function localIsoDate(date: Date): string {
 
 export function formatChineseLunarDay(date: Date): string {
 	try {
-		return new Intl.DateTimeFormat('zh-CN-u-ca-chinese', {
+		const formatter = new Intl.DateTimeFormat('zh-CN-u-ca-chinese', {
 			month: 'short',
 			day: 'numeric',
-		}).format(date).replace(/^.*年/u, '').replace(/\s+/gu, '');
+		});
+		const parts = formatter.formatToParts(date);
+		const month = parts.find((part) => part.type === 'month')?.value ?? '';
+		const day = parts.find((part) => part.type === 'day')?.value ?? '';
+		return `${month}${day}`.replace(/\s+/gu, '');
 	} catch {
 		return '';
 	}
@@ -45,6 +49,7 @@ export function buildCalendarMonth(
 	today: string,
 	weekStartsOn: 0 | 1,
 	showLunar: boolean,
+	showHolidays = true,
 ): DashboardCalendarMonth {
 	const firstDay = new Date(year, month, 1);
 	const offset = (firstDay.getDay() - weekStartsOn + 7) % 7;
@@ -55,7 +60,7 @@ export function buildCalendarMonth(
 		const date = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + index);
 		const isoDate = localIsoDate(date);
 		const inCurrentMonth = date.getMonth() === month;
-		const holiday = inCurrentMonth ? FIXED_HOLIDAYS[isoDate.slice(5)] : undefined;
+		const holiday = inCurrentMonth && showHolidays ? FIXED_HOLIDAYS[isoDate.slice(5)] : undefined;
 		const lunarLabel = inCurrentMonth && showLunar ? formatChineseLunarDay(date) : undefined;
 		return {
 			isoDate,

@@ -8,6 +8,10 @@ import type {
 	RecentFilesDashboardModuleConfig,
 	TextDashboardModuleConfig,
 	WeatherDashboardModuleConfig,
+	DateDashboardModuleConfig,
+	TodoDashboardModuleConfig,
+	CountdownDashboardModuleConfig,
+	HeatmapDashboardModuleConfig,
 } from '../../domain/types';
 import type { DashboardModuleSettingsContext } from './types';
 import { parseChartCsv, serializeChartData, type ChartData } from './chart-model';
@@ -40,16 +44,9 @@ export function renderWeatherSettings(context: DashboardModuleSettingsContext): 
 		.addOption('openweathermap', '开放天气地图')
 		.setValue(config.provider)
 		.onChange((provider) => update({ provider: provider as WeatherDashboardModuleConfig['provider'] })));
-	new Setting(context.container).setName('接口密钥').setDesc('和风天气或开放天气地图使用；密钥保存在插件配置中。').addText((text) => {
-		text.inputEl.type = 'password';
-		text.setPlaceholder('免密钥数据源可留空')
-			.setValue(config.apiKey)
-			.onChange((apiKey) => update({ apiKey }));
-	});
-	new Setting(context.container).setName('接口主机').setDesc('仅和风天气使用，填写控制台分配的接口主机。').addText((text) => text
-		.setPlaceholder('https://abc.re.qweatherapi.com')
-		.setValue(config.apiHost)
-		.onChange((apiHost) => update({ apiHost })));
+	new Setting(context.container)
+		.setName('天气服务凭据')
+		.setDesc('接口密钥和和风天气接口主机统一在“设置 → 个人视图”中管理。');
 	new Setting(context.container).setName('地点名称').addText((text) => text
 		.setPlaceholder('上海')
 		.setValue(config.locationName)
@@ -87,6 +84,66 @@ export function renderCalendarSettings(context: DashboardModuleSettingsContext):
 	new Setting(context.container).setName('显示农历').addToggle((toggle) => toggle
 		.setValue(config.showLunar)
 		.onChange((showLunar) => update({ showLunar })));
+	new Setting(context.container).setName('显示节假日').addToggle((toggle) => toggle
+		.setValue(config.showHolidays)
+		.onChange((showHolidays) => update({ showHolidays })));
+}
+
+function pathListSetting(container: HTMLElement, name: string, description: string, value: string[], update: (paths: string[]) => void): void {
+	new Setting(container).setName(name).setDesc(description).addTextArea((area) => area
+		.setPlaceholder('每行一个目录')
+		.setValue(value.join('\n'))
+		.onChange((text) => update(text.split(/\r?\n/u).map((item) => item.trim()).filter(Boolean))));
+}
+
+export function renderDateSettings(context: DashboardModuleSettingsContext): void {
+	let config = context.config as DateDashboardModuleConfig;
+	const update = (patch: Partial<DateDashboardModuleConfig>) => { config = { ...config, ...patch }; context.update(config); };
+	section(context.container, '日期显示', '显示当前本地日期；“星期”对应日期单位显示。');
+	for (const item of [
+		['显示农历', 'showLunar'], ['显示节假日', 'showHoliday'], ['显示实时时间', 'showTime'],
+		['显示星期', 'showWeekday'], ['时间显示秒', 'showSeconds'],
+	] as const) {
+		new Setting(context.container).setName(item[0]).addToggle((toggle) => toggle
+			.setValue(config[item[1]]).onChange((value) => update({ [item[1]]: value })));
+	}
+}
+
+export function renderTodoSettings(context: DashboardModuleSettingsContext): void {
+	let config = context.config as TodoDashboardModuleConfig;
+	const update = (patch: Partial<TodoDashboardModuleConfig>) => { config = { ...config, ...patch }; context.update(config); };
+	section(context.container, '待办范围', '自动收集指定目录中使用 Markdown 复选框编写的未完成任务。');
+	pathListSetting(context.container, '包含目录', '留空表示整个库。', config.rootPaths, (rootPaths) => update({ rootPaths }));
+	pathListSetting(context.container, '排除目录', '目录及其子目录均会排除。', config.excludePaths, (excludePaths) => update({ excludePaths }));
+	new Setting(context.container).setName('显示数量').addSlider((slider) => slider.setLimits(1, 100, 1).setDynamicTooltip()
+		.setValue(config.limit).onChange((limit) => update({ limit })));
+	new Setting(context.container).setName('显示来源').addToggle((toggle) => toggle.setValue(config.showSource)
+		.onChange((showSource) => update({ showSource })));
+}
+
+export function renderCountdownSettings(context: DashboardModuleSettingsContext): void {
+	let config = context.config as CountdownDashboardModuleConfig;
+	const update = (patch: Partial<CountdownDashboardModuleConfig>) => { config = { ...config, ...patch }; context.update(config); };
+	section(context.container, '倒计日', '按照本地自然日计算，不受当前时间和时区偏移影响。');
+	new Setting(context.container).setName('事件名称').addText((text) => text.setValue(config.eventName).onChange((eventName) => update({ eventName })));
+	new Setting(context.container).setName('目标日期').addText((text) => {
+		text.inputEl.type = 'date';
+		text.setValue(config.targetDate).onChange((targetDate) => update({ targetDate }));
+	});
+	new Setting(context.container).setName('包含今天').addToggle((toggle) => toggle.setValue(config.includeToday).onChange((includeToday) => update({ includeToday })));
+	new Setting(context.container).setName('显示目标日期').addToggle((toggle) => toggle.setValue(config.showTargetDate).onChange((showTargetDate) => update({ showTargetDate })));
+}
+
+export function renderHeatmapSettings(context: DashboardModuleSettingsContext): void {
+	let config = context.config as HeatmapDashboardModuleConfig;
+	const update = (patch: Partial<HeatmapDashboardModuleConfig>) => { config = { ...config, ...patch }; context.update(config); };
+	section(context.container, '文件变更热力图', 'Obsidian 不提供历史编辑次数，因此按每个文件当前的最后修改日期统计。');
+	pathListSetting(context.container, '包含目录', '留空表示整个库。', config.rootPaths, (rootPaths) => update({ rootPaths }));
+	pathListSetting(context.container, '排除目录', '目录及其子目录均会排除。', config.excludePaths, (excludePaths) => update({ excludePaths }));
+	new Setting(context.container).setName('统计周期').addDropdown((dropdown) => dropdown
+		.addOption('90', '最近 90 天').addOption('180', '最近 180 天').addOption('365', '最近 365 天')
+		.setValue(String(config.days)).onChange((days) => update({ days: Number(days) })));
+	new Setting(context.container).setName('热力颜色').addColorPicker((picker) => picker.setValue(config.color).onChange((color) => update({ color })));
 }
 
 export function renderNoteStatsSettings(context: DashboardModuleSettingsContext): void {
@@ -290,6 +347,24 @@ export function renderChartSettings(context: DashboardModuleSettingsContext): vo
 		.addOption('pie', '饼图')
 		.setValue(config.chartType)
 		.onChange((chartType) => update({ chartType: chartType as ChartDashboardModuleConfig['chartType'] })));
+	section(context.container, '图表显示', '坐标轴仅用于折线图和柱状图；其余选项按当前图表类型显示。');
+	new Setting(context.container).setName('显示坐标轴').addToggle((toggle) => toggle.setValue(config.showAxes).onChange((showAxes) => update({ showAxes })));
+	new Setting(context.container).setName('显示图例').addToggle((toggle) => toggle.setValue(config.showLegend).onChange((showLegend) => update({ showLegend })));
+	new Setting(context.container).setName('显示数据标签').addToggle((toggle) => toggle.setValue(config.showDataLabels).onChange((showDataLabels) => update({ showDataLabels })));
+	new Setting(context.container).setName('坐标轴颜色').addColorPicker((picker) => picker.setValue(config.axisColor).onChange((axisColor) => update({ axisColor })));
+	new Setting(context.container).setName('图例颜色').addColorPicker((picker) => picker.setValue(config.legendColor).onChange((legendColor) => update({ legendColor })));
+	new Setting(context.container).setName('数据标签颜色').addColorPicker((picker) => picker.setValue(config.dataLabelColor).onChange((dataLabelColor) => update({ dataLabelColor })));
+	const colorSetting = new Setting(context.container).setName('数据系列颜色').setDesc('最多配置 8 个系列，未配置的系列使用默认颜色。');
+	const colors = colorSetting.controlEl.createDiv({ cls: 'op-chart-series-colors' });
+	for (let index = 0; index < Math.max(3, config.seriesColors.length); index += 1) {
+		const picker = colors.createEl('input', { attr: { type: 'color', 'aria-label': `系列 ${index + 1} 颜色` } });
+		picker.value = config.seriesColors[index] ?? ['#0c66e4', '#22a06b', '#c25100'][index % 3]!;
+		picker.addEventListener('input', () => {
+			const seriesColors = [...config.seriesColors];
+			seriesColors[index] = picker.value;
+			update({ seriesColors });
+		});
+	}
 	const csvSetting = new Setting(context.container).setName('粘贴 CSV').setDesc('第一行为列名；数据修改后会同步到下方表格。');
 	let data: ChartData;
 	try {

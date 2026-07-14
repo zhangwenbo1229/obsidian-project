@@ -1,6 +1,7 @@
 import type { GlobalConfig, PersonalDashboardCardLayout, ProjectConfig, SavedProjectFilter, TagGroup, TagStyle, TaskConfigurationTemplate } from '../domain/types';
 import { normalizeProjectViewDisplay, type ProjectViewDisplaySettings } from '../views/task-display-settings';
 import { normalizePersonalDashboardSettings, type PersonalDashboardSettings } from '../views/personal-dashboard-settings';
+import { isDashboardModuleKind, normalizeDashboardModuleConfig } from '../views/dashboard-modules/config';
 import { normalizeTaskFieldConfig } from './task-field-configuration';
 
 export interface ConfigurationSnapshot {
@@ -31,6 +32,27 @@ export type NormalizedConfigurationSnapshot = ConfigurationSnapshot & {
 export function normalizeConfigurationSnapshot(
 	snapshot: ConfigurationSnapshot,
 ): NormalizedConfigurationSnapshot {
+	const settingsSource = snapshot.personalDashboardSettings;
+	const weatherCredentials = settingsSource?.weatherCredentials;
+	const legacyWeatherCards = (snapshot.personalDashboardLayout ?? []).filter((card) => card.kind === 'weather');
+	const qweather = legacyWeatherCards.find((card) => (card.moduleConfig as { provider?: string } | undefined)?.provider === 'qweather');
+	const openWeatherMap = legacyWeatherCards.find((card) => (card.moduleConfig as { provider?: string } | undefined)?.provider === 'openweathermap');
+	const qweatherLegacy = qweather?.moduleConfig as { apiKey?: unknown; apiHost?: unknown } | undefined;
+	const openWeatherLegacy = openWeatherMap?.moduleConfig as { apiKey?: unknown } | undefined;
+	const migratedPersonalSettings = normalizePersonalDashboardSettings({
+		...settingsSource,
+		weatherCredentials: {
+			qweatherApiKey: weatherCredentials?.qweatherApiKey || qweatherLegacy?.apiKey,
+			qweatherApiHost: weatherCredentials?.qweatherApiHost || qweatherLegacy?.apiHost,
+			openWeatherMapApiKey: weatherCredentials?.openWeatherMapApiKey || openWeatherLegacy?.apiKey,
+		},
+	});
+	const personalDashboardLayout = structuredClone(snapshot.personalDashboardLayout ?? []).map((card) => ({
+		...card,
+		moduleConfig: isDashboardModuleKind(card.kind)
+			? normalizeDashboardModuleConfig(card.kind, card.moduleConfig)
+			: card.moduleConfig,
+	}));
 	const templateIdsByLegacyId = new Map<string, string[]>();
 	const taskTemplates = (snapshot.taskTemplates ?? []).flatMap((template) => {
 		const normalizedTemplate = {
@@ -69,8 +91,8 @@ export function normalizeConfigurationSnapshot(
 		tagGroupAssignments: structuredClone(snapshot.tagGroupAssignments ?? {}),
 		taskTemplates,
 		savedProjectFilters: structuredClone(snapshot.savedProjectFilters ?? []),
-		personalDashboardLayout: structuredClone(snapshot.personalDashboardLayout ?? []),
-		personalDashboardSettings: normalizePersonalDashboardSettings(snapshot.personalDashboardSettings),
+		personalDashboardLayout,
+		personalDashboardSettings: migratedPersonalSettings,
 		projectViewDisplay: normalizeProjectViewDisplay(snapshot.projectViewDisplay, customFields),
 	};
 }

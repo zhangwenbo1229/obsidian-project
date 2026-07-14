@@ -10,11 +10,13 @@ describe('personal card workspace', () => {
 		expect(source).toContain("addEventListener('contextmenu'");
 		expect(source).toContain('draggable = true');
 		expect(source).toContain('op-dashboard-resize-handle');
+		expect(source).not.toContain("setIcon(handle, 'scaling')");
 		expect(source).toContain("addEventListener('pointerdown'");
 		expect(source).toContain('setPointerCapture');
 		expect(css).toContain('.op-dashboard-card');
 		expect(css).not.toContain('resize: both');
 		expect(css).toContain('resize: none');
+		expect(css).toMatch(/\.op-dashboard-resize-handle\s*\{[^}]*opacity:\s*0/u);
 	});
 
 	it('supports card presentation settings and responsive task content', () => {

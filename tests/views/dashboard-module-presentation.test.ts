@@ -7,6 +7,7 @@ const weather = readFileSync(new URL('../../src/views/dashboard-modules/weather-
 const news = readFileSync(new URL('../../src/views/dashboard-modules/news-card.ts', import.meta.url), 'utf8');
 const calendar = readFileSync(new URL('../../src/views/dashboard-modules/calendar-card.ts', import.meta.url), 'utf8');
 const personal = readFileSync(new URL('../../src/views/personal-view.ts', import.meta.url), 'utf8');
+const heatmap = readFileSync(new URL('../../src/views/dashboard-modules/heatmap-card.ts', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
 
 describe('dashboard module presentation', () => {
@@ -14,7 +15,12 @@ describe('dashboard module presentation', () => {
 		for (const name of ['weatherDefinition', 'calendarDefinition', 'noteStatsDefinition', 'recentFilesDefinition', 'newsDefinition', 'directoryDefinition', 'textDefinition', 'chartDefinition']) {
 			expect(registry).toContain(name);
 		}
-		expect(DASHBOARD_MODULE_DEFINITIONS).toHaveLength(8);
+		expect(DASHBOARD_MODULE_DEFINITIONS).toHaveLength(12);
+	});
+
+	it('builds the activity heatmap from every Vault file', () => {
+		expect(heatmap).toContain('vault.getFiles()');
+		expect(heatmap).not.toContain('vault.getMarkdownFiles()');
 	});
 
 	it('keeps weather and news disabled until the user opts in', () => {
@@ -46,5 +52,6 @@ describe('dashboard module presentation', () => {
 		expect(css).toMatch(/\.op-calendar-card\s*\{[^}]*overflow:\s*auto/u);
 		expect(css).toMatch(/\.op-module-calendar-grid\s*\{[^}]*min-width:/u);
 		expect(css).toMatch(/\.op-dashboard-module-card\.is-calendar \.op-dashboard-module-subtitle\s*\{[^}]*display:\s*inline/u);
+		expect(css).not.toContain('.op-module-calendar-annotation { display: none; }');
 	});
 });

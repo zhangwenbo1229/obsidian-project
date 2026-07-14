@@ -1769,6 +1769,7 @@
 	background: color-mix(in srgb, var(--background-primary) 88%, transparent);
 	color: var(--text-faint);
 	cursor: nwse-resize;
+	opacity: 0;
 	touch-action: none;
 }
 .op-dashboard-resize-handle svg { width: 13px; height: 13px; }
@@ -2119,6 +2120,41 @@
 .op-chart-table-remove { width: 24px; height: 24px; min-height: 24px; padding: 0; color: var(--text-muted); }
 .op-chart-table-actions { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 8px; }
 .op-chart-csv-input { width: min(520px, 100%); min-height: 120px; font-family: var(--font-monospace); }
+.op-chart-data-label { font-family: var(--font-monospace); font-size: 8px; }
+.op-chart-series-colors { display: flex; flex-wrap: wrap; gap: 6px; }
+.op-chart-series-colors input { width: 32px; height: 28px; padding: 2px; }
+
+.op-date-card, .op-countdown-card { display: grid; min-height: 0; align-content: center; justify-items: center; text-align: center; }
+.op-date-day { color: var(--text-normal); font-size: clamp(16px, 7cqi, 26px); font-weight: 700; }
+.op-date-weekday { margin-top: 3px; color: var(--text-muted); font-size: 11px; }
+.op-date-time { margin-top: 12px; color: var(--text-accent); font-family: var(--font-monospace); font-size: clamp(22px, 11cqi, 42px); font-weight: 700; }
+.op-date-meta { margin-top: 9px; color: var(--text-muted); font-size: 10px; }
+.op-countdown-event { color: var(--text-muted); font-size: 11px; }
+.op-countdown-value { display: flex; align-items: baseline; gap: 6px; margin: 8px 0; }
+.op-countdown-value strong { color: var(--text-accent); font-family: var(--font-monospace); font-size: clamp(38px, 18cqi, 72px); line-height: 1; }
+.op-countdown-value span { color: var(--text-muted); font-size: 11px; }
+.op-countdown-target { color: var(--text-faint); font-family: var(--font-monospace); font-size: 10px; }
+
+.op-todo-list { display: grid; gap: 3px; }
+.op-todo-item { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; width: 100%; min-height: 38px; padding: 6px; border: 0; border-radius: 5px; background: transparent; box-shadow: none; text-align: left; }
+.op-todo-item:hover { background: var(--background-modifier-hover); }
+.op-todo-checkbox { color: var(--text-accent); }
+.op-todo-checkbox svg { width: 15px; height: 15px; }
+.op-todo-copy { display: grid; min-width: 0; gap: 2px; }
+.op-todo-copy > span { overflow-wrap: anywhere; color: var(--text-normal); font-size: 11px; }
+.op-todo-copy small { overflow: hidden; color: var(--text-faint); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+
+.op-heatmap-card { display: grid; min-height: 0; align-content: start; gap: 8px; }
+.op-heatmap-summary { display: flex; align-items: baseline; gap: 6px; color: var(--text-muted); font-size: 10px; }
+.op-heatmap-summary strong { color: var(--text-normal); font-family: var(--font-monospace); font-size: 18px; }
+.op-heatmap-scroll { min-width: 0; padding-bottom: 4px; overflow-x: auto; }
+.op-heatmap-grid { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 11px); gap: 3px; width: max-content; }
+.op-heatmap-cell { width: 11px; height: 11px; border: 1px solid color-mix(in srgb, var(--background-modifier-border) 75%, transparent); border-radius: 2px; background: var(--background-secondary); }
+.op-heatmap-cell.is-level-1 { background: color-mix(in srgb, var(--op-heatmap-color) 28%, var(--background-primary)); }
+.op-heatmap-cell.is-level-2 { background: color-mix(in srgb, var(--op-heatmap-color) 48%, var(--background-primary)); }
+.op-heatmap-cell.is-level-3 { background: color-mix(in srgb, var(--op-heatmap-color) 72%, var(--background-primary)); }
+.op-heatmap-cell.is-level-4 { background: var(--op-heatmap-color); }
+.op-heatmap-note { color: var(--text-faint); font-size: 8px; }
 
 .op-dashboard-module-settings-header { margin: 16px 0 4px; padding-top: 12px; border-top: 1px solid var(--background-modifier-border); }
 .op-dashboard-module-settings-header h3 { margin: 0 0 3px; font-size: var(--font-ui-medium); }
@@ -2136,7 +2172,7 @@
 	.op-note-stats-tile:last-child { grid-column: 1 / -1; }
 	.op-recent-file { grid-template-columns: auto minmax(0, 1fr); }
 	.op-recent-file-time { display: none; }
-	.op-module-calendar-annotation { display: none; }
+	.op-module-calendar-annotation { font-size: 6px; }
 	.op-chart-label { display: none; }
 }
 

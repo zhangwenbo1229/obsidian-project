@@ -13,12 +13,16 @@ const CARD_KIND_LABELS: Record<DashboardCardKind, string> = {
 	'task-list': '任务列表卡片',
 	weather: '天气卡片',
 	calendar: '日历卡片',
+	date: '日期卡片',
+	todo: '待办卡片',
 	'note-stats': '笔记统计卡片',
 	'recent-files': '最近文件卡片',
 	news: '资讯卡片',
 	directory: '目录卡片',
 	text: '文本卡片',
 	chart: '图表卡片',
+	countdown: '倒计日卡片',
+	heatmap: '热力图卡片',
 };
 
 export class PersonalDashboardSettingsEditor {
@@ -29,6 +33,35 @@ export class PersonalDashboardSettingsEditor {
 	}
 
 	mount(container: HTMLElement): void {
+		new Setting(container)
+			.setName('天气服务')
+			.setDesc('天气凭据在所有天气卡片之间共享，只保存在当前库的插件 data.json 中。')
+			.setHeading();
+		new Setting(container).setName('和风天气接口密钥').addText((text) => {
+			text.inputEl.type = 'password';
+			text.setPlaceholder('Qweather API key')
+				.setValue(this.value.weatherCredentials.qweatherApiKey)
+				.onChange((qweatherApiKey) => {
+					this.value.weatherCredentials.qweatherApiKey = qweatherApiKey;
+				});
+		});
+		new Setting(container)
+			.setName('和风天气接口主机')
+			.setDesc('必须是 HTTPS 地址，例如控制台分配的 abc.re.qweatherapi.com。')
+			.addText((text) => text
+				.setPlaceholder('https://abc.re.qweatherapi.com')
+				.setValue(this.value.weatherCredentials.qweatherApiHost)
+				.onChange((qweatherApiHost) => {
+					this.value.weatherCredentials.qweatherApiHost = qweatherApiHost;
+				}));
+		new Setting(container).setName('开放天气地图接口密钥').addText((text) => {
+			text.inputEl.type = 'password';
+			text.setPlaceholder('Openweathermap API key')
+				.setValue(this.value.weatherCredentials.openWeatherMapApiKey)
+				.onChange((openWeatherMapApiKey) => {
+					this.value.weatherCredentials.openWeatherMapApiKey = openWeatherMapApiKey;
+				});
+		});
 		new Setting(container)
 			.setName('个人视图自定义卡片')
 			.setDesc('只有开启的类型才会出现在个人视图空白处的右键新增菜单中；已创建的卡片不会被删除。')
@@ -42,6 +75,7 @@ export class PersonalDashboardSettingsEditor {
 					else enabled.delete(kind);
 					this.value = {
 						enabledCardKinds: ALL_DASHBOARD_CARD_KINDS.filter((candidate) => enabled.has(candidate)),
+						weatherCredentials: this.value.weatherCredentials,
 					};
 				}));
 		}

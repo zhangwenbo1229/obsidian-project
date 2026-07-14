@@ -12,6 +12,7 @@ const PAGE_LABELS: Record<SettingsRootPage, string> = {
 	people: '人员',
 	templates: '任务模板',
 	projects: '项目',
+	'personal-dashboard': '个人视图',
 	'view-display': '视图显示',
 };
 
@@ -20,6 +21,7 @@ const PAGE_ICONS: Record<SettingsRootPage, string> = {
 	people: 'users',
 	templates: 'file-text',
 	projects: 'folder-kanban',
+	'personal-dashboard': 'layout-dashboard',
 	'view-display': 'panels-top-left',
 };
 
@@ -45,6 +47,7 @@ export class ObsidianProjectSettingTab extends PluginSettingTab {
 		else if (this.navigation.page === 'people') this.renderPeople(content);
 		else if (this.navigation.page === 'templates') this.renderTemplates(content);
 		else if (this.navigation.page === 'projects') this.renderProjects(content);
+		else if (this.navigation.page === 'personal-dashboard') this.renderPersonalDashboard(content);
 		else if (this.navigation.page === 'view-display') this.renderViewDisplay(content);
 		else this.renderProjectDetail(content);
 	}
@@ -180,11 +183,15 @@ export class ObsidianProjectSettingTab extends PluginSettingTab {
 	}
 
 	private renderViewDisplay(container: HTMLElement): void {
-		this.renderPageHeading(container, '视图显示', '控制个人视图可新增卡片类型，以及项目四种视图模式中的任务字段。');
-		const personalSection = container.createDiv({ cls: 'op-settings-section op-personal-dashboard-settings' });
-		new PersonalDashboardSettingsEditor(this.plugin.manager).mount(personalSection);
+		this.renderPageHeading(container, '视图显示', '控制项目四种视图模式中的任务字段与显示顺序。');
 		const section = container.createDiv({ cls: 'op-settings-section op-view-display-settings' });
 		new ViewDisplaySettingsEditor(this.plugin.manager).mount(section);
+	}
+
+	private renderPersonalDashboard(container: HTMLElement): void {
+		this.renderPageHeading(container, '个人视图', '管理个人工作台可用卡片类型，以及天气服务的全局连接配置。');
+		const section = container.createDiv({ cls: 'op-settings-section op-personal-dashboard-settings' });
+		new PersonalDashboardSettingsEditor(this.plugin.manager).mount(section);
 	}
 
 	private renderProjectDetail(container: HTMLElement): void {

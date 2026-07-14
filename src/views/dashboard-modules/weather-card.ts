@@ -41,6 +41,7 @@ function renderSnapshot(body: HTMLElement, snapshot: WeatherSnapshot): void {
 
 async function renderWeather(context: DashboardModuleRenderContext): Promise<void> {
 	const config = context.card.moduleConfig as WeatherDashboardModuleConfig;
+	const credentials = context.manager.personalDashboardSettings.weatherCredentials;
 	context.heading.createSpan({ cls: 'op-dashboard-module-subtitle', text: config.locationName });
 	const body = createModuleBody(context.container, 'op-weather-card');
 	if (!config.networkEnabled) {
@@ -59,8 +60,10 @@ async function renderWeather(context: DashboardModuleRenderContext): Promise<voi
 				longitude: config.longitude,
 				forecastDays: config.forecastDays,
 				refreshMinutes: config.refreshMinutes,
-				apiKey: config.apiKey,
-				apiHost: config.apiHost,
+				apiKey: config.provider === 'qweather'
+					? credentials.qweatherApiKey
+					: config.provider === 'openweathermap' ? credentials.openWeatherMapApiKey : '',
+				apiHost: config.provider === 'qweather' ? credentials.qweatherApiHost : '',
 			}, force);
 			if (!context.isCurrent() || currentLoad !== loadGeneration) return;
 			renderSnapshot(body, snapshot);
