@@ -24,7 +24,9 @@ jobs:
             - name: Build plugin
               run: |
                   npm ci
-                  npm run build
+                  tag="${GITHUB_REF#refs/tags/}"
+                  node scripts/check-release.mjs "$tag"
+                  npm run build:ci
 
             - name: Check for optional styles
               id: styles

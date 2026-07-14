@@ -29,4 +29,35 @@ export default defineConfig(
 		},
 	},
 	...obsidianmd.configs.recommended,
+	{
+		files: ['scripts/**/*.mjs', 'tests/**/*.ts', 'vitest.config.ts'],
+		languageOptions: {
+			globals: {
+				...globals.node,
+			},
+		},
+		rules: {
+			'obsidianmd/hardcoded-config-path': 'off',
+			'obsidianmd/no-nodejs-modules': 'off',
+			'obsidianmd/rule-custom-message': 'off',
+		},
+	},
+	{
+		files: ['scripts/seed-demo.mjs'],
+		languageOptions: {
+			globals: {
+				app: 'readonly',
+			},
+		},
+		rules: {
+			'no-restricted-globals': 'off',
+			'obsidianmd/prefer-window-timers': 'off',
+		},
+	},
+	{
+		rules: {
+			// Declarative settings require Obsidian 1.13; the plugin supports 1.7.2.
+			'obsidianmd/settings-tab/prefer-setting-definitions': 'off',
+		},
+	},
 );
