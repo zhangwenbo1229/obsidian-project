@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
+import { parse } from 'yaml';
 
 const directories: string[] = [];
 afterEach(() => { for (const directory of directories) rmSync(directory, { recursive: true, force: true }); directories.length = 0; });
@@ -18,6 +19,12 @@ it('rejects a release tag that differs from package and manifest versions', () =
 
 it('publishes validated tag builds as a non-draft GitHub release', () => {
 	const workflow = readFileSync(new URL('../../.github/workflows/release.yml', import.meta.url), 'utf8');
+	const parsed = parse(workflow) as { jobs: { build: { steps: Array<{ name?: string; run?: string }> } } };
+	const steps = parsed.jobs.build.steps;
+	expect(steps.map((step) => step.name).filter(Boolean)).toEqual(expect.arrayContaining([
+		'Install dependencies', 'Validate release version', 'Run tests', 'Run lint', 'Build plugin', 'Create release',
+	]));
+	expect(steps.find((step) => step.name === 'Validate release version')?.run).toContain('github.ref_name');
 	expect(workflow).toContain('npm test');
 	expect(workflow).toContain('npm run lint');
 	expect(workflow).toContain('gh release create');

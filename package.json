@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-project",
-	"version": "1.0.0",
+	"version": "1.0.1",
 	"description": "Project and task management for Obsidian",
 	"main": "main.js",
 	"type": "module",
