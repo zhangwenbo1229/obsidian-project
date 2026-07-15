@@ -69,8 +69,8 @@ export class PersonalDashboardSettingsEditor {
 				this.value.fileOpenCounts = {};
 			}));
 		new Setting(container)
-			.setName('个人视图自定义卡片')
-			.setDesc('只有开启的类型才会出现在个人视图空白处的右键新增菜单中；已创建的卡片不会被删除。')
+			.setName('个人仪表盘自定义卡片')
+			.setDesc('只有开启的类型才会出现在个人仪表盘空白处的右键新增菜单中；已创建的卡片不会被删除。')
 			.setHeading();
 		const enabled = new Set(this.value.enabledCardKinds);
 		for (const kind of ALL_DASHBOARD_CARD_KINDS) {
@@ -87,10 +87,10 @@ export class PersonalDashboardSettingsEditor {
 				}));
 		}
 		new Setting(container).addButton((button) => button
-			.setButtonText('保存个人视图卡片配置')
+			.setButtonText('保存个人仪表盘卡片配置')
 			.setCta()
 			.onClick(() => void this.manager.savePersonalDashboardSettings(this.value)
-				.then(() => new Notice('个人视图卡片配置已保存。'))
+				.then(() => new Notice('个人仪表盘卡片配置已保存。'))
 				.catch((error: unknown) => new Notice(error instanceof Error ? error.message : String(error)))));
 	}
 }

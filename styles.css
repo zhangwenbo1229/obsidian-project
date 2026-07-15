@@ -707,15 +707,18 @@
 
 .op-table tbody tr:hover { background: var(--background-modifier-hover); }
 .op-list-scroll {
+	display: grid;
 	width: 100%;
 	min-width: 0;
 	max-height: calc(100vh - 300px);
-	padding-bottom: 6px;
-	overflow-x: scroll;
-	overflow-y: auto;
+	grid-template-rows: minmax(0, 1fr) auto;
+	overflow: hidden;
 	overscroll-behavior: contain;
-	scrollbar-gutter: stable;
 }
+.op-list-scroll-viewport { min-width: 0; min-height: 0; overflow: auto; scrollbar-width: none; }
+.op-list-scroll-viewport::-webkit-scrollbar { display: none; }
+.op-list-scrollbar { width: 100%; min-width: 0; height: 16px; overflow-x: scroll; overflow-y: hidden; scrollbar-gutter: stable; }
+.op-list-scrollbar-spacer { height: 1px; }
 
 .op-board {
 	display: grid;
@@ -1251,6 +1254,7 @@
 	box-shadow: 0 1px 3px rgb(9 30 66 / 14%);
 }
 .op-view-display-panel { min-width: 0; }
+.op-view-display-summary { margin: -6px 0 12px; color: var(--text-muted); font-size: var(--font-ui-smaller); }
 .op-sortable-field-list { display: grid; gap: 5px; margin-bottom: var(--size-4-3); }
 .op-sortable-field-row {
 	display: grid;
@@ -2118,8 +2122,8 @@
 .op-text-card-input { width: 100%; resize: vertical; font-family: var(--font-monospace); }
 .op-text-card-preview { overflow: auto; border: 1px solid var(--background-modifier-border); border-radius: 6px; background: var(--background-primary); }
 
-.op-chart-card { display: grid; min-height: 0; grid-template-rows: minmax(120px, 1fr) auto; gap: 7px; overflow: hidden; }
-.op-chart-svg { display: block; width: 100%; height: 100%; min-height: 140px; overflow: visible; }
+.op-chart-card { display: grid; min-height: 0; flex: 1; grid-template-rows: minmax(220px, 1fr) auto; gap: 7px; overflow: hidden; }
+.op-chart-svg { display: block; width: 100%; height: 100%; min-height: 220px; overflow: visible; }
 .op-chart-axis { stroke: var(--background-modifier-border-hover); stroke-width: 1; }
 .op-chart-line { stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
 .op-chart-label { fill: var(--text-muted); font-family: var(--font-interface); font-size: 12px; }
@@ -2154,13 +2158,16 @@
 .op-todo-item { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 8px; width: 100%; min-height: 38px; padding: 6px; border: 0; border-radius: 5px; background: transparent; box-shadow: none; text-align: left; }
 .op-todo-item:hover { background: var(--background-modifier-hover); }
 .op-todo-checkbox { width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--interactive-accent); }
-.op-todo-copy { display: grid; min-width: 0; gap: 2px; }
-.op-todo-item, .op-todo-copy { background: transparent !important; box-shadow: none !important; }
-.op-todo-copy { width: 100%; padding: 0; border: 0; text-align: left; }
+.op-todo-content { display: grid; min-width: 0; gap: 2px; }
+.op-todo-item, .op-todo-text, .op-todo-source { background: transparent !important; box-shadow: none !important; }
+.op-todo-text, .op-todo-source { width: 100%; min-height: 0; padding: 0; border: 0; text-align: left; }
+.op-todo-source { display: flex; min-width: 0; align-items: center; gap: 4px; color: var(--text-faint); }
+.op-todo-source-icon { display: inline-flex; flex: none; }
+.op-todo-source-icon svg { width: 10px; height: 10px; }
 .op-todo-inline-editor, .op-text-card-inline-editor { width: 100%; border-color: var(--interactive-accent); background: var(--background-primary); color: var(--text-normal); }
 .op-text-card-inline-editor { min-height: 160px; resize: vertical; font-family: var(--font-monospace); }
-.op-todo-copy > span { overflow-wrap: anywhere; color: var(--text-normal); font-size: 11px; }
-.op-todo-copy small { overflow: hidden; color: var(--text-faint); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.op-todo-text > span { overflow-wrap: anywhere; color: var(--text-normal); font-size: 11px; }
+.op-todo-source > span:last-child { overflow: hidden; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
 
 .op-heatmap-card { display: grid; min-height: 0; align-content: start; gap: 8px; }
 .op-heatmap-summary { display: flex; align-items: baseline; gap: 6px; color: var(--text-muted); font-size: 10px; }

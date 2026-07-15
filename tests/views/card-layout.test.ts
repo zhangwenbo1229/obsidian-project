@@ -44,10 +44,15 @@ describe('task card layout', () => {
 	});
 
 	it('keeps list horizontal scrolling visible inside constrained project surfaces', () => {
+		const source = readFileSync(new URL('../../src/views/project-view.ts', import.meta.url), 'utf8');
 		expect(ruleFor('.op-project-content')).toMatch(/min-width:\s*0/u);
 		expect(ruleFor('.op-mode-surface')).toMatch(/min-width:\s*0/u);
-		expect(ruleFor('.op-list-scroll')).toMatch(/overflow-x:\s*scroll/u);
-		expect(ruleFor('.op-list-scroll')).toMatch(/scrollbar-gutter:\s*stable/u);
+		expect(ruleFor('.op-list-scroll')).toMatch(/grid-template-rows:\s*minmax\(0,\s*1fr\)\s+auto/u);
+		expect(ruleFor('.op-list-scroll-viewport')).toMatch(/overflow:\s*auto/u);
+		expect(ruleFor('.op-list-scrollbar')).toMatch(/overflow-x:\s*scroll/u);
+		expect(source).toContain('op-list-scroll-viewport');
+		expect(source).toContain('op-list-scrollbar');
+		expect(source).toContain('syncingHorizontalScroll');
 	});
 
 	it('aligns rendered Markdown task checkboxes with their text', () => {

@@ -1,5 +1,9 @@
 name: Release Obsidian plugin
 
+concurrency:
+    group: release-${{ github.ref }}
+    cancel-in-progress: false
+
 on:
     push:
         tags:
@@ -26,6 +30,8 @@ jobs:
                   npm ci
                   tag="${GITHUB_REF#refs/tags/}"
                   node scripts/check-release.mjs "$tag"
+                  npm test
+                  npm run lint
                   npm run build:ci
 
             - name: Check for optional styles
@@ -48,5 +54,6 @@ jobs:
 
                   gh release create "$tag" \
                     --title="$tag" \
-                    --draft \
+                    --verify-tag \
+                    --generate-notes \
                     main.js manifest.json ${{ steps.styles.outputs.exists == 'true' && 'styles.css' || '' }}

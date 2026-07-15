@@ -49,7 +49,7 @@ export class PersonalView extends ItemView {
 	}
 
 	getViewType(): string { return PERSONAL_VIEW_TYPE; }
-	getDisplayText(): string { return '个人视图'; }
+	getDisplayText(): string { return '个人仪表盘'; }
 	getIcon(): string { return 'layout-dashboard'; }
 
 	async onOpen(): Promise<void> {

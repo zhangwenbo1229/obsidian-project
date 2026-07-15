@@ -1,4 +1,4 @@
-import { Notice } from 'obsidian';
+import { Notice, setIcon } from 'obsidian';
 import type { TodoDashboardModuleConfig } from '../../domain/types';
 import { createModuleBody, renderModuleMessage } from './card-ui';
 import { collectIncompleteTodos, isTodoPathInScope, setMarkdownTodoCompleted, setMarkdownTodoText } from './todo-model';
@@ -24,19 +24,24 @@ async function renderTodo(context: DashboardModuleRenderContext): Promise<void> 
 		const file = sources.find((source) => source.path === todo.path)?.file;
 		const row = list.createDiv({ cls: 'op-todo-item', attr: { title: `${todo.path}:${todo.line}` } });
 		const checkbox = row.createEl('input', { cls: 'op-todo-checkbox', attr: { type: 'checkbox', 'aria-label': `完成待办：${todo.text}` } });
-		const copy = row.createEl('button', { cls: 'op-todo-copy', attr: { type: 'button' } });
-		copy.createSpan({ text: todo.text });
-		if (config.showSource) copy.createEl('small', { text: `${todo.path} · 第 ${todo.line} 行` });
+		const content = row.createDiv({ cls: 'op-todo-content' });
+		const text = content.createEl('button', { cls: 'op-todo-text', attr: { type: 'button', title: '双击编辑待办内容' } });
+		text.createSpan({ text: todo.text });
 		if (file) {
-			let openTimer: number | undefined;
-			copy.addEventListener('click', () => {
-				if (openTimer !== undefined) window.clearTimeout(openTimer);
-				openTimer = window.setTimeout(() => void context.manager.app.workspace.getLeaf(false).openFile(file), 220);
-			});
-			copy.addEventListener('dblclick', (event) => {
+			if (config.showSource) {
+				const source = content.createEl('button', {
+					cls: 'op-todo-source',
+					attr: { type: 'button', 'aria-label': `打开来源 ${todo.path} 第 ${todo.line} 行`, title: '打开来源文件' },
+				});
+				const icon = source.createSpan({ cls: 'op-todo-source-icon' });
+				setIcon(icon, 'external-link');
+				source.createSpan({ text: `${todo.path} · 第 ${todo.line} 行` });
+				source.addEventListener('click', () => void context.manager.app.workspace.getLeaf(false).openFile(file));
+			}
+			text.addEventListener('dblclick', (event) => {
 				event.preventDefault();
-				if (openTimer !== undefined) window.clearTimeout(openTimer);
-				copy.hidden = true;
+				event.stopPropagation();
+				content.hidden = true;
 				const input = row.createEl('input', { cls: 'op-todo-inline-editor', attr: { type: 'text', 'aria-label': '编辑待办内容' } });
 				input.value = todo.text;
 				input.focus();
@@ -46,7 +51,7 @@ async function renderTodo(context: DashboardModuleRenderContext): Promise<void> 
 					if (finished) return;
 					finished = true;
 					input.remove();
-					copy.hidden = false;
+					content.hidden = false;
 				};
 				const save = async () => {
 					if (finished) return;

@@ -483,15 +483,20 @@ export class ProjectView extends ItemView {
 	}
 	private renderList(parent: HTMLElement, tasks: ReturnType<typeof filterProjectTasks>): void {
 		parent.addClass('op-list-scroll');
+		const viewport = parent.createDiv({ cls: 'op-list-scroll-viewport' });
+		const scrollbar = parent.createDiv({ cls: 'op-list-scrollbar', attr: { 'aria-label': '列表横向滚动条' } });
+		const scrollbarSpacer = scrollbar.createDiv({ cls: 'op-list-scrollbar-spacer' });
 		const fields = this.displayFields('list');
 		const columns = this.columnDefinitions(fields);
 		const sorted = [...tasks].sort((left, right) => {
 			const result = this.columnValue(left, this.sortColumn).localeCompare(this.columnValue(right, this.sortColumn), 'zh-CN');
 			return this.sortAscending ? result : -result;
 		});
-		const table = parent.createEl('table', { cls: 'op-table' });
+		const table = viewport.createEl('table', { cls: 'op-table' });
 		const updateTableWidth = () => {
-			table.style.width = `${totalColumnWidth(columns.map((column) => this.columnWidths[column.id] ?? 140))}px`;
+			const width = totalColumnWidth(columns.map((column) => this.columnWidths[column.id] ?? 140));
+			table.style.width = `${width}px`;
+			scrollbarSpacer.style.width = `${width}px`;
 		};
 		updateTableWidth();
 		const header = table.createEl('thead').createEl('tr');
@@ -552,9 +557,18 @@ export class ProjectView extends ItemView {
 			rendered = Math.min(sorted.length, rendered + 100);
 		};
 		appendChunk();
-		parent.addEventListener('scroll', () => {
-			if (parent.scrollTop + parent.clientHeight >= parent.scrollHeight - 80 && rendered < sorted.length) appendChunk();
+		let syncingHorizontalScroll = false;
+		const syncScroll = (source: HTMLElement, target: HTMLElement) => {
+			if (syncingHorizontalScroll) return;
+			syncingHorizontalScroll = true;
+			target.scrollLeft = source.scrollLeft;
+			syncingHorizontalScroll = false;
+		};
+		viewport.addEventListener('scroll', () => {
+			syncScroll(viewport, scrollbar);
+			if (viewport.scrollTop + viewport.clientHeight >= viewport.scrollHeight - 80 && rendered < sorted.length) appendChunk();
 		});
+		scrollbar.addEventListener('scroll', () => syncScroll(scrollbar, viewport));
 	}
 	private columnDefinitions(fields: readonly TaskDisplayField[]): Array<{ id: string; name: string }> {
 		const definitions: Partial<Record<TaskDisplayField, { id: string; name: string }>> = {

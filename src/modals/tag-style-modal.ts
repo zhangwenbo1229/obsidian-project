@@ -42,7 +42,7 @@ export class TagStyleModal extends Modal {
 
 		new Setting(this.contentEl)
 			.setName('标签颜色')
-			.setDesc('应用到个人视图、项目视图和标签侧边栏。')
+			.setDesc('应用到个人仪表盘、项目视图和标签侧边栏。')
 			.addColorPicker((picker) => picker.setValue(this.color).onChange((value) => (this.color = value)));
 
 		new Setting(this.contentEl)

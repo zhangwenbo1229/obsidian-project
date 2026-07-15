@@ -124,7 +124,7 @@ export class TemplateSettingsEditor {
 			}));
 		new Setting(card)
 			.setName('任务标题颜色')
-			.setDesc('控制个人视图和项目视图中的任务标题颜色。')
+			.setDesc('控制个人仪表盘和项目视图中的任务标题颜色。')
 			.addColorPicker((picker) => picker.setValue(type.titleColor ?? '#0c66e4').onChange((value) => (type.titleColor = value)))
 			.addExtraButton((button) => button.setIcon('rotate-ccw').setTooltip('使用主题文字颜色').onClick(() => {
 				type.titleColor = undefined;

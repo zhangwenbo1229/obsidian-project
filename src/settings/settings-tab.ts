@@ -12,7 +12,7 @@ const PAGE_LABELS: Record<SettingsRootPage, string> = {
 	people: '人员',
 	templates: '任务模板',
 	projects: '项目',
-	'personal-dashboard': '个人视图',
+	'personal-dashboard': '个人仪表盘',
 	'view-display': '视图显示',
 };
 
@@ -189,7 +189,7 @@ export class ObsidianProjectSettingTab extends PluginSettingTab {
 	}
 
 	private renderPersonalDashboard(container: HTMLElement): void {
-		this.renderPageHeading(container, '个人视图', '管理个人工作台可用卡片类型，以及天气服务的全局连接配置。');
+		this.renderPageHeading(container, '个人仪表盘', '管理个人仪表盘可用卡片类型，以及天气服务的全局连接配置。');
 		const section = container.createDiv({ cls: 'op-settings-section op-personal-dashboard-settings' });
 		new PersonalDashboardSettingsEditor(this.plugin.manager).mount(section);
 	}

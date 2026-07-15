@@ -9,6 +9,8 @@ const calendar = readFileSync(new URL('../../src/views/dashboard-modules/calenda
 const personal = readFileSync(new URL('../../src/views/personal-view.ts', import.meta.url), 'utf8');
 const heatmap = readFileSync(new URL('../../src/views/dashboard-modules/heatmap-card.ts', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
+const chart = readFileSync(new URL('../../src/views/dashboard-modules/chart-card.ts', import.meta.url), 'utf8');
+const todo = readFileSync(new URL('../../src/views/dashboard-modules/todo-card.ts', import.meta.url), 'utf8');
 
 describe('dashboard module presentation', () => {
 	it('uses dedicated renderers for all six custom module cards', () => {
@@ -28,6 +30,21 @@ describe('dashboard module presentation', () => {
 		expect(css).toMatch(/\.op-chart-data-label\s*\{[^}]*font-size:\s*(?:10|11)px/u);
 		expect(css).toMatch(/\.op-chart-legend\s*\{[^}]*font-size:\s*(?:11|12)px/u);
 		expect(css).not.toContain('.op-chart-label { display: none; }');
+	});
+
+	it('lets the chart canvas consume the available card body', () => {
+		expect(css).toMatch(/\.op-chart-card\s*\{[^}]*flex:\s*1/u);
+		expect(css).toMatch(/\.op-chart-svg\s*\{[^}]*min-height:\s*220px/u);
+		expect(chart).toContain("preserveAspectRatio: 'xMidYMid meet'");
+	});
+
+	it('separates todo editing from source navigation without a click timer race', () => {
+		expect(todo).toContain('op-todo-text');
+		expect(todo).toContain('op-todo-source');
+		expect(todo).toContain("text.addEventListener('dblclick'");
+		expect(todo).toContain("source.addEventListener('click'");
+		expect(todo).not.toContain('openTimer');
+		expect(todo).not.toContain('window.setTimeout');
 	});
 
 	it('keeps weather and news disabled until the user opts in', () => {

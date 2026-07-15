@@ -89,7 +89,10 @@ function renderChart(context: DashboardModuleRenderContext): void {
 		const data = parseChartCsv(config.csv);
 		const svg = body.createSvg('svg', {
 			cls: 'op-chart-svg',
-			attr: { viewBox: '0 0 400 220', role: 'img', 'aria-label': `${context.card.title ?? '图表'}：${config.chartType}` },
+			attr: {
+				viewBox: '0 0 400 220', preserveAspectRatio: 'xMidYMid meet',
+				role: 'img', 'aria-label': `${context.card.title ?? '图表'}：${config.chartType}`,
+			},
 		});
 		if (config.chartType === 'line') renderLineChart(svg, data, config);
 		else if (config.chartType === 'bar') renderBarChart(svg, data, config);

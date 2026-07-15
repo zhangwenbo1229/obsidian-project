@@ -46,7 +46,7 @@ export function renderWeatherSettings(context: DashboardModuleSettingsContext): 
 		.onChange((provider) => update({ provider: provider as WeatherDashboardModuleConfig['provider'] })));
 	new Setting(context.container)
 		.setName('天气服务凭据')
-		.setDesc('接口密钥和和风天气接口主机统一在“设置 → 个人视图”中管理。');
+		.setDesc('接口密钥和和风天气接口主机统一在“设置 → 个人仪表盘”中管理。');
 	new Setting(context.container).setName('地点名称').addText((text) => text
 		.setPlaceholder('上海')
 		.setValue(config.locationName)

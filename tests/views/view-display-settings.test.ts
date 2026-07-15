@@ -43,6 +43,12 @@ describe('project view display settings', () => {
 		expect(editor).toContain('op-view-display-tabs');
 		expect(editor).toContain('SortableDisplayFields');
 		expect(sortable).toContain('draggable');
+		expect(editor).toContain('当前显示');
+		expect(editor).toContain('保存当前模式');
+		expect(editor).toContain('恢复当前模式默认值');
+		expect(editor).toContain('DEFAULT_PROJECT_VIEW_DISPLAY');
+		expect(editor).toContain('this.value[mode] = [...this.manager.projectViewDisplay[mode]]');
+		expect(editor).not.toContain('this.value = normalizeProjectViewDisplay(this.manager.projectViewDisplay');
 	});
 
 	it('exposes custom fields as independently configurable display entries', () => {

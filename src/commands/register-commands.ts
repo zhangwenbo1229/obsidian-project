@@ -6,7 +6,7 @@ import { COMMAND_IDS } from './command-ids';
 export function registerCommands(plugin: ObsidianProjectPlugin): void {
 	plugin.addCommand({
 		id: COMMAND_IDS[0],
-		name: '打开个人视图',
+		name: '打开个人仪表盘',
 		callback: () => void plugin.activatePersonalView(),
 	});
 	plugin.addCommand({

@@ -34,7 +34,7 @@ export default class ObsidianProjectPlugin extends Plugin {
 		registerCommands(this);
 		registerBuiltinTagEditor(this, this.manager);
 		this.addSettingTab(new ObsidianProjectSettingTab(this.app, this));
-		this.addRibbonIcon('layout-dashboard', '打开个人视图', () => void this.activatePersonalView());
+		this.addRibbonIcon('layout-dashboard', '打开个人仪表盘', () => void this.activatePersonalView());
 		this.addRibbonIcon('panels-top-left', '打开项目视图', () => void this.activateProjectView());
 
 		let refreshTimer: number | undefined;
