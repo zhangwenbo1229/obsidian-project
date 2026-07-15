@@ -41,8 +41,8 @@ describe('workflow transitions', () => {
 		const done = transitionTask(doing, project.workflow, 'done', new Date('2026-07-13T11:00:00+08:00'));
 		const reopened = transitionTask(done, project.workflow, 'waiting', new Date('2026-07-14T12:00:00+08:00'));
 
-		expect(doing.startDate).toContain('2026-07-12T10:00:00');
-		expect(done.completedAt).toContain('2026-07-13T11:00:00');
+		expect(new Date(doing.startDate!).getTime()).toBe(new Date('2026-07-12T10:00:00+08:00').getTime());
+		expect(new Date(done.completedAt!).getTime()).toBe(new Date('2026-07-13T11:00:00+08:00').getTime());
 		expect(reopened.completedAt).toBeNull();
 		expect(reopened.terminatedAt).toBeNull();
 	});
