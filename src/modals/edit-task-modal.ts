@@ -5,14 +5,15 @@ import type { ProjectManager } from '../services/project-manager';
 import { fromDateTimeLocalInput, localDateTime, toDateTimeLocalInput } from '../utils/dates';
 import { createUuid } from '../utils/ids';
 import { MigrationModal } from './migration-modal';
-import type { TaskFormField, TaskPriority, TaskTypeDefinition } from '../domain/types';
+import type { TaskFormField, TaskTypeDefinition } from '../domain/types';
 import { buildTaskDialogShell } from './task-dialog';
 import { resolveTaskTypeTemplate, switchTaskTypeDraft } from '../services/task-service';
 import { renderMarkdownEditor, type MarkdownEditorHandle } from './markdown-editor';
-import { taskFieldEnabled, taskFieldRule } from '../settings/task-field-configuration';
+import { taskFieldEnabled, taskFieldOptions, taskFieldRule } from '../settings/task-field-configuration';
 import { validateConfiguredTaskFields } from '../services/task-field-validation';
 import { renderGroupedTagPicker } from './grouped-tag-picker';
 import { applyFieldPresentation } from '../views/field-presentation';
+import { renderSubtaskListEditor } from './subtask-list-editor';
 
 function fieldSetting(container: HTMLElement, name: string, type: TaskTypeDefinition | undefined, field: TaskFormField): Setting {
 	const setting = new Setting(container).setName(name);
@@ -46,7 +47,7 @@ export class EditTaskModal extends Modal {
 	}
 
 	onOpen(): void {
-		this.setTitle(`${this.document.metadata.key} · 编辑任务`);
+		this.setTitle('编辑项目');
 		this.render();
 	}
 
@@ -63,13 +64,11 @@ export class EditTaskModal extends Modal {
 		const presentation = (field: TaskFormField) => taskFieldRule(taskType, field);
 		const identityEl = shell.createSection('基本信息');
 		const planningEl = shell.createSection('计划与人员');
-		const customEl = taskFieldEnabled(taskType, 'customFields') ? shell.createSection('自定义字段', undefined, presentation('customFields')) : null;
-		customEl?.addClass('op-task-custom-fields');
-		const bodyEl = taskFieldEnabled(taskType, 'body') ? shell.createSection('任务正文', 'op-task-dialog-section-wide', presentation('body')) : null;
+		const bodyEl = taskFieldEnabled(taskType, 'body') ? shell.createSection('项目描述', 'op-task-dialog-section-wide', presentation('body')) : null;
 		const linksEditorEl = taskFieldEnabled(taskType, 'links') ? shell.createSection('链接', 'op-task-dialog-section-wide', presentation('links')) : null;
-		const subtasksEl = taskFieldEnabled(taskType, 'subtasks') ? shell.createSection('子任务', 'op-task-dialog-section-wide', presentation('subtasks')) : null;
+		const subtasksEl = taskFieldEnabled(taskType, 'subtasks') ? shell.createSection('任务', 'op-task-dialog-section-wide', presentation('subtasks')) : null;
 		const workflowEl = shell.createSection('工作流', 'op-task-dialog-section-wide');
-		const relationsEl = taskFieldEnabled(taskType, 'relations') ? shell.createSection('任务关系', 'op-task-dialog-section-wide', presentation('relations')) : null;
+		const relationsEl = taskFieldEnabled(taskType, 'relations') ? shell.createSection('项目关系', 'op-task-dialog-section-wide', presentation('relations')) : null;
 		const notesEl = taskFieldEnabled(taskType, 'notes') ? shell.createSection('备注', 'op-task-dialog-section-wide', presentation('notes')) : null;
 
 		if (taskFieldEnabled(taskType, 'title')) fieldSetting(identityEl, '标题', taskType, 'title').addText((text) =>
@@ -92,12 +91,14 @@ export class EditTaskModal extends Modal {
 				this.render();
 			});
 		});
-		if (taskFieldEnabled(taskType, 'priority')) fieldSetting(identityEl, '优先级', taskType, 'priority').addDropdown((dropdown) => dropdown
-			.addOption('high', '高')
-			.addOption('medium', '中')
-			.addOption('low', '低')
-			.setValue(this.document.metadata.priority ?? 'medium')
-			.onChange((value) => (this.document.metadata.priority = value as TaskPriority)));
+		if (taskFieldEnabled(taskType, 'priority')) fieldSetting(identityEl, '优先级', taskType, 'priority').addDropdown((dropdown) => {
+			const options = taskFieldOptions(taskType, 'priority');
+			for (const option of options) dropdown.addOption(option.id, option.name);
+			const current = this.document.metadata.priority;
+			if (current && !options.some((option) => option.id === current)) dropdown.addOption(current, `${current}（当前值）`);
+			dropdown.setValue(current ?? options[0]?.id ?? 'medium')
+				.onChange((value) => (this.document.metadata.priority = value));
+		});
 		if (taskFieldEnabled(taskType, 'reporter')) fieldSetting(planningEl, '提报人', taskType, 'reporter').addDropdown((dropdown) => {
 			for (const person of this.manager.globalConfig.people) dropdown.addOption(person.id, person.name);
 			dropdown.setValue(this.document.metadata.reporterId).onChange((value) => (this.document.metadata.reporterId = value));
@@ -107,7 +108,11 @@ export class EditTaskModal extends Modal {
 			for (const person of this.manager.globalConfig.people) dropdown.addOption(person.id, person.name);
 			dropdown.setValue(this.document.metadata.assigneeId ?? '').onChange((value) => (this.document.metadata.assigneeId = value || null));
 		});
-		if (taskFieldEnabled(taskType, 'dueDate')) fieldSetting(planningEl, '计划完成日期', taskType, 'dueDate').addText((text) => {
+		if (taskFieldEnabled(taskType, 'scheduledDate')) fieldSetting(planningEl, '计划日期', taskType, 'scheduledDate').addText((text) => {
+			text.inputEl.type = 'datetime-local';
+			text.setValue(toDateTimeLocalInput(this.document.metadata.scheduledDate ?? null)).onChange((value) => (this.document.metadata.scheduledDate = fromDateTimeLocalInput(value)));
+		});
+		if (taskFieldEnabled(taskType, 'dueDate')) fieldSetting(planningEl, '截止日期', taskType, 'dueDate').addText((text) => {
 			text.inputEl.type = 'datetime-local';
 			text.setValue(toDateTimeLocalInput(this.document.metadata.dueDate)).onChange((value) => (this.document.metadata.dueDate = fromDateTimeLocalInput(value)));
 		});
@@ -115,13 +120,9 @@ export class EditTaskModal extends Modal {
 			text.inputEl.type = 'datetime-local';
 			text.setValue(toDateTimeLocalInput(this.document.metadata.startDate)).onChange((value) => (this.document.metadata.startDate = fromDateTimeLocalInput(value)));
 		});
-		if (taskFieldEnabled(taskType, 'completedAt')) fieldSetting(planningEl, '完成日期', taskType, 'completedAt').addText((text) => {
+		if (taskFieldEnabled(taskType, 'endDate')) fieldSetting(planningEl, '结束日期', taskType, 'endDate').addText((text) => {
 			text.inputEl.type = 'datetime-local';
-			text.setValue(toDateTimeLocalInput(this.document.metadata.completedAt)).onChange((value) => (this.document.metadata.completedAt = fromDateTimeLocalInput(value)));
-		});
-		if (taskFieldEnabled(taskType, 'terminatedAt')) fieldSetting(planningEl, '终止日期', taskType, 'terminatedAt').addText((text) => {
-			text.inputEl.type = 'datetime-local';
-			text.setValue(toDateTimeLocalInput(this.document.metadata.terminatedAt)).onChange((value) => (this.document.metadata.terminatedAt = fromDateTimeLocalInput(value)));
+			text.setValue(toDateTimeLocalInput(this.document.metadata.endDate ?? null)).onChange((value) => (this.document.metadata.endDate = fromDateTimeLocalInput(value)));
 		});
 		if (taskFieldEnabled(taskType, 'tags')) renderGroupedTagPicker(
 			planningEl,
@@ -140,23 +141,16 @@ export class EditTaskModal extends Modal {
 		}));
 		if (linksEditorEl) new Setting(linksEditorEl)
 			.setName('Markdown 链接')
-			.setDesc('结构化任务关系在下方单独管理；这里保留普通 wikilink 和 URL。')
+			.setDesc('结构化项目关系在下方单独管理；这里保留普通 wikilink 和 URL。')
 			.addTextArea((area) => {
 				area.inputEl.addClass('op-markdown-editor', 'is-compact');
 				area.setValue(this.document.unknownLinks.join('\n')).onChange((value) => {
 					this.document.unknownLinks = value.split(/\r?\n/u).map((line) => line.trim()).filter(Boolean);
 				});
 			});
-		if (subtasksEl) this.markdownEditors.push(renderMarkdownEditor({
-			app: this.manager.app,
-			container: subtasksEl,
-			value: this.document.subtasks ?? '',
-			onChange: (value) => (this.document.subtasks = value),
-			sourcePath: this.entry.path,
-			placeholder: '- [ ] 使用 Markdown 记录子任务',
-		}));
-		for (const field of customEl ? this.entry.project.customFields.filter((item) => item.active && (!item.taskTypeIds || item.taskTypeIds.includes(this.document.metadata.taskTypeId))) : []) {
-			const setting = new Setting(customEl!).setName(field.name);
+		if (subtasksEl) this.renderSubtasks(subtasksEl);
+		for (const field of this.entry.project.customFields.filter((item) => item.active && (!item.taskTypeIds || item.taskTypeIds.includes(this.document.metadata.taskTypeId)))) {
+			const setting = new Setting(planningEl).setName(field.name);
 			applyFieldPresentation(setting, field);
 			if (field.type === 'boolean') {
 				setting.addToggle((toggle) => toggle.setValue(Boolean(this.document.metadata.custom[field.key])).onChange((value) => (this.document.metadata.custom[field.key] = value)));
@@ -197,9 +191,6 @@ export class EditTaskModal extends Modal {
 				}));
 			}
 		}
-		if (customEl && customEl.childElementCount === 0) {
-			customEl.createDiv({ cls: 'op-task-dialog-empty', text: '当前项目没有启用自定义字段。' });
-		}
 		const transitions = availableTransitions(this.document.metadata.statusId, this.entry.project.workflow);
 		const transitionSetting = new Setting(workflowEl).setName('状态转换');
 		for (const transition of transitions) {
@@ -223,9 +214,9 @@ export class EditTaskModal extends Modal {
 		}
 		const candidates = this.manager.index.validTasks().filter((task) => task.document.metadata.uid !== this.document.metadata.uid);
 		if (relationsEl) new Setting(relationsEl)
-			.setName('添加关联任务')
+			.setName('添加关联项目')
 			.addDropdown((dropdown) => {
-				dropdown.addOption('', '选择任务');
+				dropdown.addOption('', '选择项目');
 				for (const task of candidates) dropdown.addOption(task.document.metadata.uid, `${task.document.metadata.key} · ${task.document.metadata.title}`);
 				dropdown.setValue(this.relationTargetUid).onChange((value) => (this.relationTargetUid = value));
 			})
@@ -263,13 +254,27 @@ export class EditTaskModal extends Modal {
 			placeholder: '输入 Markdown 备注后选择添加。',
 		}));
 		new Setting(shell.footerEl)
-			.addButton((button) => button.setButtonText('在 Markdown 中打开').onClick(() => void this.manager.openTask(this.entry.path)))
+			.addButton((button) => button.setButtonText('在 Markdown 中打开').onClick(() => {
+				this.close();
+				void this.manager.openTask(this.entry.path);
+			}))
 			.addButton((button) => button.setButtonText('迁移项目').onClick(() => new MigrationModal(this.manager, this.entry).open()))
 			.addButton((button) => button.setWarning().setButtonText(this.deleteArmed ? '再次选择确认删除' : '删除任务').onClick(() => {
 				if (!this.deleteArmed) { this.deleteArmed = true; this.render(); return; }
 				void this.deleteTask();
 			}))
 			.addButton((button) => button.setButtonText('保存').setCta().onClick(() => void this.save()));
+	}
+
+	private renderSubtasks(container: HTMLElement): void {
+		renderSubtaskListEditor(container, {
+			manager: this.manager,
+			value: this.document.subtasks ?? '',
+			parent: this.entry,
+			parentLabel: `${this.entry.document.metadata.key} · ${this.document.metadata.title}`,
+			onChange: (value) => (this.document.subtasks = value),
+			onRerender: () => this.render(),
+		});
 	}
 
 	private addRelation(): void {
@@ -310,10 +315,10 @@ export class EditTaskModal extends Modal {
 			priority: this.document.metadata.priority,
 			reporter: this.document.metadata.reporterId,
 			assignee: this.document.metadata.assigneeId,
+			scheduledDate: this.document.metadata.scheduledDate ?? null,
 			startDate: this.document.metadata.startDate,
 			dueDate: this.document.metadata.dueDate,
-			completedAt: this.document.metadata.completedAt,
-			terminatedAt: this.document.metadata.terminatedAt,
+			endDate: this.document.metadata.endDate ?? null,
 			tags: this.document.metadata.tags,
 			body: this.document.body,
 			links: this.document.unknownLinks,

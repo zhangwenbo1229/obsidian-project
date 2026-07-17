@@ -10,13 +10,16 @@ describe('personal dashboard module configuration', () => {
 	it('catalogs every module with practical default card sizes', () => {
 		expect(DASHBOARD_MODULE_CATALOG.map((item) => item.kind)).toEqual([
 			'weather', 'calendar', 'date', 'todo', 'note-stats', 'recent-files', 'news', 'directory', 'text', 'chart',
-			'countdown', 'heatmap',
+			'countdown', 'progress', 'check-in', 'heatmap', 'iframe',
 		]);
 		expect(DASHBOARD_MODULE_CATALOG.find((item) => item.kind === 'calendar')?.defaultSize).toEqual({ columns: 2, rows: 3 });
 		expect(DASHBOARD_MODULE_CATALOG.find((item) => item.kind === 'weather')?.icon).toBe('cloud-sun');
+		expect(DASHBOARD_MODULE_CATALOG.find((item) => item.kind === 'heatmap')?.icon).toBe('layout-grid');
 	});
 
 	it('normalizes safe defaults and keeps network modules disabled', () => {
+		expect(normalizeDashboardModuleConfig('todo', {})).toMatchObject({ showMetadata: true });
+		expect(normalizeDashboardModuleConfig('todo', { showMetadata: false })).toMatchObject({ showMetadata: false });
 		expect(normalizeDashboardModuleConfig('weather', null)).toEqual({
 			networkEnabled: false,
 			provider: 'open-meteo',
@@ -65,23 +68,38 @@ describe('personal dashboard module configuration', () => {
 			showLunar: true,
 			showHolidays: true,
 			weekStartsOn: 1,
+			useCheckInData: false,
+			checkInCardId: null,
+			checkInColor: '#22a06b',
+			checkInIcon: 'badge-check',
 		});
 		expect(normalizeDashboardModuleConfig('date', {})).toEqual({
 			showLunar: true, showHoliday: true, showTime: true, showWeekday: true, showSeconds: true,
 		});
 		expect(normalizeDashboardModuleConfig('todo', { rootPaths: [' Work ', ''], excludePaths: ['Work/Archive'], limit: 999 })).toEqual({
-			rootPaths: ['Work'], excludePaths: ['Work/Archive'], limit: 100, showSource: true,
+			rootPaths: ['Work'], excludePaths: ['Work/Archive'], limit: 100, showSource: true, showMetadata: true,
 		});
 		expect(normalizeDashboardModuleConfig('countdown', {})).toMatchObject({
-			eventName: '目标日', includeToday: false, showTargetDate: true,
+			eventName: '目标日', mode: 'countdown', includeToday: false, showTargetDate: true,
+		});
+		expect(normalizeDashboardModuleConfig('countdown', { mode: 'countup' })).toMatchObject({ mode: 'countup' });
+		expect(normalizeDashboardModuleConfig('progress', {})).toEqual({
+			showWeek: true, showMonth: true, showYear: true, fillColor: '#ffab00', trackColor: '#b3dce8',
 		});
 		expect(normalizeDashboardModuleConfig('heatmap', { days: 999, color: 'bad' })).toMatchObject({
-			days: 365, color: '#22a06b', rootPaths: [], excludePaths: [],
+			days: 365, color: '#22a06b', rootPaths: [], excludePaths: [], useCheckInData: false, checkInCardId: null,
 		});
+		expect(normalizeDashboardModuleConfig('check-in', { dailyTarget: 99, buttonLabel: ' 完成阅读 ' })).toEqual({
+			dailyTarget: 20, buttonLabel: '完成阅读', showStreak: true, showTotalDays: true, progressStyle: 'linear',
+		});
+		expect(normalizeDashboardModuleConfig('check-in', { progressStyle: 'semicircle' })).toMatchObject({ progressStyle: 'semicircle' });
 		expect(normalizeDashboardModuleConfig('chart', {})).toMatchObject({
 			showAxes: true, showLegend: true, showDataLabels: false,
 			axisColor: '#8590a2', legendColor: '#626f86', dataLabelColor: '#44546f',
 		});
+		expect(normalizeDashboardModuleConfig('iframe', { url: 'javascript:alert(1)' })).toEqual({ url: '' });
+		expect(normalizeDashboardModuleConfig('iframe', { url: 'https://cn.widgetstore.net/view/index.html?q=demo' }))
+			.toEqual({ url: 'https://cn.widgetstore.net/view/index.html?q=demo' });
 	});
 
 	it('creates and migrates independently configured module cards', () => {

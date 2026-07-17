@@ -4,8 +4,10 @@ import { createHeadingButton, createModuleBody, renderModuleMessage } from './ca
 import { renderNewsSettings } from './module-settings';
 import { NewsService, type NewsItem, type NewsLoadResult } from './news-service';
 import type { DashboardModuleDefinition, DashboardModuleRenderContext } from './types';
+import { DashboardRequestPolicy } from './request-policy';
 
-const newsService = new NewsService(async (url) => (await requestUrl({ url })).text);
+const newsRequests = new DashboardRequestPolicy(async (url) => (await requestUrl({ url })).text);
+const newsService = new NewsService((url) => newsRequests.request(url));
 
 function renderNewsPage(body: HTMLElement, result: NewsLoadResult, pageSize: number, requestedPage: number): void {
 	body.empty();

@@ -27,9 +27,9 @@ const BUILT_IN_CARD_TITLES: Record<string, string> = {
 };
 
 const CARD_KIND_TITLES: Partial<Record<DashboardCardKind, string>> = {
-	number: '数字', percentage: '百分比', 'task-list': '任务列表', weather: '天气', calendar: '日历',
+	number: '数字', percentage: '百分比', 'task-list': '项目', weather: '天气', calendar: '日历',
 	date: '日期', todo: '待办', 'note-stats': '笔记统计', 'recent-files': '文件', news: '资讯',
-	directory: '目录', text: '文本', chart: '图表', countdown: '倒计日', heatmap: '热力图',
+	directory: '目录', text: '文本', chart: '图表', countdown: '倒计日', 'check-in': '打卡', heatmap: '热力图',
 };
 
 export const BUILT_IN_DASHBOARD_CARD_IDS = new Set(DEFAULTS.map(([id]) => id));
@@ -54,6 +54,7 @@ const DEFAULT_KIND_BACKGROUNDS: Partial<Record<DashboardCardKind, string>> = {
 	directory: '#8f7ee7',
 	text: '#0c66e4',
 	chart: '#6554c0',
+	'check-in': '#22a06b',
 };
 
 export function defaultDashboardCardBackground(metric: DashboardMetric, kind: DashboardCardKind = 'number'): string {
@@ -83,12 +84,13 @@ function normalizeCard(
 		title: card.title?.trim() || undefined,
 		numberColor: card.numberColor?.trim() || undefined,
 		backgroundColor: card.backgroundColor?.trim() || defaultDashboardCardBackground(metric, kind),
-		fontSize: Number.isFinite(card.fontSize) ? Math.min(28, Math.max(10, Math.round(card.fontSize!))) : 14,
+		fontSize: Number.isFinite(card.fontSize) ? Math.min(40, Math.max(8, Math.round(card.fontSize!))) : 14,
 		percentageDataMode: card.percentageDataMode === 'manual' || card.percentageDataMode === 'direct' ? card.percentageDataMode : 'task',
 		percentageCurrent: Number.isFinite(card.percentageCurrent) ? Math.max(0, card.percentageCurrent!) : 0,
 		percentageTarget: Number.isFinite(card.percentageTarget) && card.percentageTarget! > 0 ? card.percentageTarget! : 100,
 		percentageValue: Number.isFinite(card.percentageValue) ? Math.min(100, Math.max(0, card.percentageValue!)) : 0,
 		percentageDisplay: card.percentageDisplay === 'progress' ? 'progress' : 'number',
+		percentageProgressStyle: card.percentageProgressStyle === 'semicircle' ? 'semicircle' : 'linear',
 		moduleConfig: isDashboardModuleKind(kind) ? normalizeDashboardModuleConfig(kind, card.moduleConfig) : undefined,
 	};
 }

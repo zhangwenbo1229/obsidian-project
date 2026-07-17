@@ -58,16 +58,6 @@ export function registerBuiltinTagEditor(plugin: Plugin, manager: ProjectManager
 		dropTarget = null;
 	};
 	const applyTagGroups = () => {
-		if (manager.tagGroups.length === 0) {
-			ownerDocument.querySelectorAll<HTMLElement>('.op-tag-group-heading').forEach((heading) => {
-				if (heading.parentElement) delete heading.parentElement.dataset.opTagGroupSignature;
-				heading.remove();
-			});
-			for (const container of Array.from(ownerDocument.querySelectorAll<HTMLElement>(TAG_CONTAINER_SELECTOR))) {
-				delete container.dataset.opTagGroupSignature;
-			}
-			return;
-		}
 		const rootEntries = Array.from(ownerDocument.querySelectorAll<HTMLElement>(TAG_ROW_SELECTOR)).flatMap((row) => {
 			const wrapper = row.closest<HTMLElement>('.tree-item');
 			if (!wrapper || wrapper.parentElement?.closest('.tree-item-children')) return [];
@@ -86,7 +76,8 @@ export function registerBuiltinTagEditor(plugin: Plugin, manager: ProjectManager
 		for (const [container, entries] of containers) {
 			const grouped = groupTags(entries.map((entry) => entry.path), manager.tagGroups, manager.tagGroupAssignments);
 			const signature = JSON.stringify(grouped.map((group) => [group.groupId, group.name, group.tags]));
-			if (container.dataset.opTagGroupSignature === signature) continue;
+			const existingHeadings = Array.from(container.querySelectorAll<HTMLElement>(':scope > .op-tag-group-heading'));
+			if (container.dataset.opTagGroupSignature === signature && existingHeadings.length === grouped.length) continue;
 			container.querySelectorAll(':scope > .op-tag-group-heading').forEach((heading) => heading.remove());
 			const wrappersByPath = new Map(entries.map((entry) => [entry.path, entry.wrapper]));
 			for (const group of grouped) {
@@ -106,6 +97,14 @@ export function registerBuiltinTagEditor(plugin: Plugin, manager: ProjectManager
 	};
 	const applyTagStyles = () => {
 		styleRefreshQueued = false;
+		if (!manager.nativeSidebarSettings.tagsEnabled) {
+			ownerDocument.querySelectorAll('.op-tag-group-heading').forEach((element) => element.remove());
+			for (const row of Array.from(ownerDocument.querySelectorAll<HTMLElement>(TAG_ROW_SELECTOR))) {
+				findBuiltinTagText(row)?.style.removeProperty('color');
+				row.querySelector(':scope .op-builtin-tag-style-icon')?.remove();
+			}
+			return;
+		}
 		for (const row of Array.from(ownerDocument.querySelectorAll<HTMLElement>(TAG_ROW_SELECTOR))) {
 			if (row.querySelector('.op-builtin-tag-input')) continue;
 			const text = findBuiltinTagText(row);
@@ -158,6 +157,7 @@ export function registerBuiltinTagEditor(plugin: Plugin, manager: ProjectManager
 	plugin.register(manager.onChange(scheduleTagStyleRefresh));
 	applyTagStyles();
 	plugin.registerDomEvent(ownerDocument, 'contextmenu', (event) => {
+		if (!manager.nativeSidebarSettings.tagsEnabled) return;
 		const target = elementFromEvent(event);
 		const groupHeading = target?.closest<HTMLElement>('.op-tag-group-heading');
 		if (groupHeading) {
@@ -165,14 +165,21 @@ export function registerBuiltinTagEditor(plugin: Plugin, manager: ProjectManager
 			event.stopPropagation();
 			const group = manager.tagGroups.find((item) => item.id === groupHeading.dataset.groupId);
 			const menu = new Menu();
-			if (group) menu.addItem((item) => item
-				.setTitle('编辑标签分组')
-				.setIcon('folder-cog')
-				.onClick(() => new TagGroupModal(manager, group).open()));
 			menu.addItem((item) => item
 				.setTitle('新建标签分组')
 				.setIcon('folder-plus')
 				.onClick(() => new TagGroupModal(manager).open()));
+			menu.addItem((item) => item
+				.setTitle('编辑标签分组')
+				.setIcon('folder-cog')
+				.setDisabled(!group)
+				.onClick(() => { if (group) new TagGroupModal(manager, group).open(); }));
+			menu.addItem((item) => item
+				.setTitle('删除标签分组')
+				.setIcon('trash-2')
+				.setWarning(true)
+				.setDisabled(!group)
+				.onClick(() => { if (group) void manager.deleteTagGroup(group.id); }));
 			menu.showAtMouseEvent(event);
 			return;
 		}
@@ -199,10 +206,12 @@ export function registerBuiltinTagEditor(plugin: Plugin, manager: ProjectManager
 		menu.showAtMouseEvent(event);
 	});
 	plugin.registerDomEvent(ownerDocument, 'pointerdown', (event) => {
+		if (!manager.nativeSidebarSettings.tagsEnabled) return;
 		const row = elementFromEvent(event)?.closest<HTMLElement>(TAG_ROW_SELECTOR);
 		if (row) row.draggable = true;
 	});
 	plugin.registerDomEvent(ownerDocument, 'dragstart', (event) => {
+		if (!manager.nativeSidebarSettings.tagsEnabled) return;
 		const row = elementFromEvent(event)?.closest<HTMLElement>(TAG_ROW_SELECTOR);
 		const text = row ? findBuiltinTagText(row) : null;
 		if (!row || !text || !event.dataTransfer) return;
@@ -213,6 +222,7 @@ export function registerBuiltinTagEditor(plugin: Plugin, manager: ProjectManager
 		row.addClass('op-tag-is-dragging');
 	});
 	plugin.registerDomEvent(ownerDocument, 'dragover', (event) => {
+		if (!manager.nativeSidebarSettings.tagsEnabled) return;
 		const target = elementFromEvent(event);
 		const row = target?.closest<HTMLElement>(TAG_ROW_SELECTOR) ?? null;
 		const container = target?.closest<HTMLElement>(TAG_CONTAINER_SELECTOR);
@@ -226,6 +236,7 @@ export function registerBuiltinTagEditor(plugin: Plugin, manager: ProjectManager
 		}
 	});
 	plugin.registerDomEvent(ownerDocument, 'drop', (event) => {
+		if (!manager.nativeSidebarSettings.tagsEnabled) return;
 		const target = elementFromEvent(event);
 		const row = target?.closest<HTMLElement>(TAG_ROW_SELECTOR) ?? null;
 		const container = target?.closest<HTMLElement>(TAG_CONTAINER_SELECTOR);
@@ -249,6 +260,7 @@ export function registerBuiltinTagEditor(plugin: Plugin, manager: ProjectManager
 	});
 	plugin.registerDomEvent(ownerDocument, 'dragend', clearDragState);
 	plugin.registerDomEvent(ownerDocument, 'dblclick', (event) => {
+		if (!manager.nativeSidebarSettings.tagsEnabled) return;
 		const target = elementFromEvent(event);
 		if (!target) return;
 		const row = target.closest<HTMLElement>(TAG_ROW_SELECTOR);

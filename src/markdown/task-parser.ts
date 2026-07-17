@@ -2,7 +2,7 @@ import { RESERVED_TASK_KEYS } from '../constants';
 import type {
 	TaskDocument,
 	TaskMetadata,
-	TaskPriority,
+	ProjectPriority,
 	TaskNote,
 	TaskRelation,
 	ValidationIssue,
@@ -10,9 +10,9 @@ import type {
 import { validateTaskMetadata } from '../domain/validation';
 import { parseFrontmatter, serializeFrontmatter } from './frontmatter';
 
-const SECTION_PATTERN = /^##\s+(任务正文|链接|子任务|备注)\s*$/gmu;
+const SECTION_PATTERN = /^##\s+(项目描述|任务正文|链接|任务|子任务|备注)\s*$/gmu;
 const RELATION_PATTERN =
-	/^-\s*(父任务|关联)：\[\[([^\]|]+)\|([^\]]+)\]\]\s*<!--\s*op-relation-id:\s*([^;]+);\s*target-uid:\s*([^\s]+)\s*-->\s*$/u;
+	/^-\s*(父项目|父任务|关联)：\[\[([^\]|]+)\|([^\]]+)\]\]\s*<!--\s*op-relation-id:\s*([^;]+);\s*target-uid:\s*([^\s]+)\s*-->\s*$/u;
 const NOTE_PATTERN =
 	/^###\s+(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2})\s+·\s+(.+)\n\s*<!--\s*op-note-id:\s*([^;]+);\s*author-id:\s*([^\s]+)\s*-->\s*\n([\s\S]*?)(?=^###\s+|(?![\s\S]))/gmu;
 
@@ -29,6 +29,10 @@ function text(value: unknown): string {
 	return typeof value === 'string' ? value : '';
 }
 
+function hasKey(value: Record<string, unknown>, key: string): boolean {
+	return Object.prototype.hasOwnProperty.call(value, key);
+}
+
 function metadataFromFrontmatter(
 	frontmatter: Record<string, unknown>,
 	customFieldKeys: ReadonlySet<string>,
@@ -36,6 +40,7 @@ function metadataFromFrontmatter(
 	metadata: TaskMetadata;
 	unknownFrontmatter: Record<string, unknown>;
 } {
+	const legacyDateModel = !hasKey(frontmatter, 'scheduled-date') && !hasKey(frontmatter, 'end-date');
 	const custom: Record<string, unknown> = {};
 	const unknownFrontmatter: Record<string, unknown> = {};
 	for (const [key, value] of Object.entries(frontmatter)) {
@@ -56,10 +61,12 @@ function metadataFromFrontmatter(
 			priority: (
 				frontmatter['task-priority'] ??
 				(['high', 'medium', 'low'].includes(String(frontmatter.priority)) ? frontmatter.priority : 'medium')
-			) as TaskPriority,
+			) as ProjectPriority,
 			createdAt: text(frontmatter['created-at']),
+			scheduledDate: (legacyDateModel ? frontmatter['due-date'] : frontmatter['scheduled-date'] ?? null) as string | null,
 			startDate: (frontmatter['start-date'] ?? null) as string | null,
-			dueDate: (frontmatter['due-date'] ?? null) as string | null,
+			dueDate: (legacyDateModel ? null : frontmatter['due-date'] ?? null) as string | null,
+			endDate: (frontmatter['end-date'] ?? null) as string | null,
 			completedAt: (frontmatter['completed-at'] ?? null) as string | null,
 			terminatedAt: (frontmatter['terminated-at'] ?? null) as string | null,
 			reporterId: text(frontmatter['reporter-id']),
@@ -80,7 +87,8 @@ function splitSections(body: string) {
 	const matches = [...body.matchAll(SECTION_PATTERN)];
 	const sections = new Map<string, string>();
 	for (const [index, match] of matches.entries()) {
-		const name = match[1]!;
+		const sourceName = match[1]!;
+		const name = sourceName === '任务正文' ? '项目描述' : sourceName === '子任务' ? '任务' : sourceName;
 		const start = (match.index ?? 0) + match[0].length;
 		const end = matches[index + 1]?.index ?? body.length;
 		sections.set(name, body.slice(start, end).trim());
@@ -102,7 +110,7 @@ function parseRelations(content: string): {
 		}
 		relations.push({
 			id: match[4]!.trim(),
-			type: match[1] === '父任务' ? 'parent' : 'related',
+			type: match[1] === '父任务' || match[1] === '父项目' ? 'parent' : 'related',
 			targetUid: match[5]!.trim(),
 			targetKey: match[2]!.trim(),
 			targetTitle: match[3]!.trim(),
@@ -137,7 +145,7 @@ export function parseTaskMarkdown(
 		);
 		const issues = [...validateTaskMetadata(mapped.metadata).issues];
 		const sections = splitSections(parsed.body);
-		for (const section of ['任务正文', '链接', '备注']) {
+		for (const section of ['项目描述', '链接', '备注']) {
 			if (!sections.has(section)) {
 				issues.push({
 					code: 'missing-section',
@@ -150,8 +158,8 @@ export function parseTaskMarkdown(
 		return {
 				document: {
 				metadata: mapped.metadata,
-					body: sections.get('任务正文') ?? parsed.body.trim(),
-					subtasks: sections.get('子任务') ?? '',
+					body: sections.get('项目描述') ?? parsed.body.trim(),
+					subtasks: sections.get('任务') ?? '',
 				relations: relationData.relations,
 				notes: parseNotes(sections.get('备注') ?? ''),
 				unknownFrontmatter: mapped.unknownFrontmatter,
@@ -186,8 +194,10 @@ function taskFrontmatter(document: TaskDocument): Record<string, unknown> {
 		'task-type-id': task.taskTypeId,
 		'task-priority': task.priority ?? 'medium',
 		'created-at': task.createdAt,
+		'scheduled-date': task.scheduledDate ?? null,
 		'start-date': task.startDate,
 		'due-date': task.dueDate,
+		'end-date': task.endDate ?? null,
 		'completed-at': task.completedAt,
 		'terminated-at': task.terminatedAt,
 		'reporter-id': task.reporterId,
@@ -201,7 +211,7 @@ function taskFrontmatter(document: TaskDocument): Record<string, unknown> {
 
 function serializeRelations(document: TaskDocument): string {
 	const structured = document.relations.map((relation) => {
-		const label = relation.type === 'parent' ? '父任务' : '关联';
+		const label = relation.type === 'parent' ? '父项目' : '关联';
 		return `- ${label}：[[${relation.targetKey}|${relation.targetTitle}]] <!-- op-relation-id: ${relation.id}; target-uid: ${relation.targetUid} -->`;
 	});
 	return [...structured, ...document.unknownLinks].join('\n');
@@ -222,7 +232,7 @@ function serializeNotes(notes: TaskNote[]): string {
 
 export function serializeTaskMarkdown(document: TaskDocument): string {
 	const body = [
-		'## 任务正文',
+		'## 项目描述',
 		'',
 		document.body.trim(),
 		'',
@@ -230,7 +240,7 @@ export function serializeTaskMarkdown(document: TaskDocument): string {
 		'',
 		serializeRelations(document),
 		'',
-		'## 子任务',
+		'## 任务',
 		'',
 		(document.subtasks ?? '').trim(),
 		'',

@@ -20,6 +20,12 @@ export function applyLabelPresentation(label: HTMLElement, presentation: FieldPr
 	if (presentation.icon) label.prepend(createFieldIcon(label, presentation.icon));
 }
 
+export function applyValuePresentation(element: HTMLElement, presentation: FieldPresentation | undefined): void {
+	if (!presentation?.color) return;
+	element.style.setProperty('--op-field-color', presentation.color);
+	element.style.color = presentation.color;
+}
+
 export function applyFieldPresentation(setting: Setting, presentation: FieldPresentation | undefined): void {
 	if (!presentation) return;
 	applyLabelPresentation(setting.nameEl, presentation);

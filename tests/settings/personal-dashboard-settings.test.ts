@@ -10,6 +10,7 @@ const legacy: ConfigurationSnapshot = {
 	globalConfig: {
 		kind: 'global-config', schema: 1, projectConfigDirectory: 'projects', defaultTaskDirectory: 'tasks',
 		currentUserId: 'user', people: [{ id: 'user', name: '用户', active: true }],
+		personMetadataFields: [],
 	},
 	projects: [],
 	tagOrder: [],
@@ -25,6 +26,15 @@ describe('personal dashboard settings', () => {
 			openWeatherMapApiKey: '',
 		});
 		expect(normalizePersonalDashboardSettings(undefined).fileOpenCounts).toEqual({});
+		expect(normalizePersonalDashboardSettings(undefined).checkInHistories).toEqual({});
+		expect(normalizePersonalDashboardSettings(undefined).openPersonalDashboardOnStartup).toBe(false);
+	});
+
+	it('persists the opt-in startup behavior and registers it after the workspace layout is ready', () => {
+		expect(normalizePersonalDashboardSettings({ openPersonalDashboardOnStartup: true }).openPersonalDashboardOnStartup).toBe(true);
+		const main = readFileSync(new URL('../../src/main.ts', import.meta.url), 'utf8');
+		expect(main).toContain('workspace.onLayoutReady');
+		expect(main).toContain('openPersonalDashboardOnStartup');
 	});
 
 	it('normalizes bounded file open counters', () => {
@@ -44,6 +54,8 @@ describe('personal dashboard settings', () => {
 		})).toEqual({
 			enabledCardKinds: ['calendar', 'weather'],
 			fileOpenCounts: {},
+			checkInHistories: {},
+			openPersonalDashboardOnStartup: false,
 			weatherCredentials: {
 				qweatherApiKey: 'secret',
 				qweatherApiHost: 'https://abc.re.qweatherapi.com',

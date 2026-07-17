@@ -1,6 +1,6 @@
 import type { CountdownDashboardModuleConfig, DateDashboardModuleConfig } from '../../domain/types';
 import { createModuleBody, renderModuleMessage } from './card-ui';
-import { buildDateSnapshot, daysUntilDate } from './date-model';
+import { buildDateSnapshot, daysFromDate, daysUntilDate } from './date-model';
 import { renderCountdownSettings, renderDateSettings } from './module-settings';
 import type { DashboardModuleDefinition, DashboardModuleRenderContext } from './types';
 
@@ -30,15 +30,22 @@ function renderDate(context: DashboardModuleRenderContext): void {
 function renderCountdown(context: DashboardModuleRenderContext): void {
 	const config = context.card.moduleConfig as CountdownDashboardModuleConfig;
 	const body = createModuleBody(context.container, 'op-countdown-card');
-	const remaining = daysUntilDate(config.targetDate, new Date(), config.includeToday);
-	if (remaining === null) {
-		renderModuleMessage(body, 'calendar-plus', '选择目标日期', '右键打开卡片设置并填写倒计日。');
+	const value = config.mode === 'countup'
+		? daysFromDate(config.targetDate, new Date(), config.includeToday)
+		: daysUntilDate(config.targetDate, new Date(), config.includeToday);
+	if (value === null) {
+		renderModuleMessage(
+			body,
+			'calendar-plus',
+			config.mode === 'countup' ? '选择过去的开始日期' : '选择目标日期',
+			'右键打开卡片设置并填写日期。',
+		);
 		return;
 	}
 	body.createDiv({ cls: 'op-countdown-event', text: config.eventName });
-	const value = body.createDiv({ cls: 'op-countdown-value' });
-	value.createEl('strong', { text: String(Math.abs(remaining)) });
-	value.createSpan({ text: remaining > 0 ? '天' : remaining < 0 ? '天前' : '就是今天' });
+	const valueElement = body.createDiv({ cls: 'op-countdown-value' });
+	valueElement.createEl('strong', { text: String(Math.abs(value)) });
+	valueElement.createSpan({ text: config.mode === 'countup' ? '天' : value > 0 ? '天' : value < 0 ? '天前' : '就是今天' });
 	if (config.showTargetDate) body.createDiv({ cls: 'op-countdown-target', text: config.targetDate });
 }
 
@@ -47,5 +54,5 @@ export const dateDefinition: DashboardModuleDefinition = {
 };
 
 export const countdownDefinition: DashboardModuleDefinition = {
-	kind: 'countdown', label: '倒计日', icon: 'hourglass', render: renderCountdown, renderSettings: renderCountdownSettings,
+	kind: 'countdown', label: '计时', icon: 'hourglass', render: renderCountdown, renderSettings: renderCountdownSettings,
 };

@@ -3,6 +3,11 @@ import { normalizeProjectViewDisplay, type ProjectViewDisplaySettings } from '..
 import { normalizePersonalDashboardSettings, type PersonalDashboardSettings } from '../views/personal-dashboard-settings';
 import { isDashboardModuleKind, normalizeDashboardModuleConfig } from '../views/dashboard-modules/config';
 import { normalizeTaskFieldConfig } from './task-field-configuration';
+import { normalizeTaskMetadataSettings, type TaskMetadataSettings } from './task-metadata-settings';
+import { normalizeCheckInHistory } from '../views/dashboard-modules/check-in-model';
+import { normalizePeopleSourceSettings, type PeopleSourceSettings } from '../services/people-source';
+import { normalizeNativeSidebarSettings, type NativeSidebarSettings } from './native-sidebar-settings';
+import { normalizeGlobalPeopleConfig } from '../services/person-metadata';
 
 export interface ConfigurationSnapshot {
 	globalConfig: GlobalConfig;
@@ -16,6 +21,9 @@ export interface ConfigurationSnapshot {
 	personalDashboardLayout?: PersonalDashboardCardLayout[];
 	projectViewDisplay?: ProjectViewDisplaySettings;
 	personalDashboardSettings?: PersonalDashboardSettings;
+	taskMetadataSettings?: TaskMetadataSettings;
+	peopleSourceSettings?: PeopleSourceSettings;
+	nativeSidebarSettings?: NativeSidebarSettings;
 }
 
 export type NormalizedConfigurationSnapshot = ConfigurationSnapshot & {
@@ -27,6 +35,9 @@ export type NormalizedConfigurationSnapshot = ConfigurationSnapshot & {
 	tagGroupAssignments: Record<string, string>;
 	projectViewDisplay: ProjectViewDisplaySettings;
 	personalDashboardSettings: PersonalDashboardSettings;
+	taskMetadataSettings: TaskMetadataSettings;
+	peopleSourceSettings: PeopleSourceSettings;
+	nativeSidebarSettings: NativeSidebarSettings;
 };
 
 export function normalizeConfigurationSnapshot(
@@ -39,7 +50,7 @@ export function normalizeConfigurationSnapshot(
 	const openWeatherMap = legacyWeatherCards.find((card) => (card.moduleConfig as { provider?: string } | undefined)?.provider === 'openweathermap');
 	const qweatherLegacy = qweather?.moduleConfig as { apiKey?: unknown; apiHost?: unknown } | undefined;
 	const openWeatherLegacy = openWeatherMap?.moduleConfig as { apiKey?: unknown } | undefined;
-	const migratedPersonalSettings = normalizePersonalDashboardSettings({
+	let migratedPersonalSettings = normalizePersonalDashboardSettings({
 		...settingsSource,
 		weatherCredentials: {
 			qweatherApiKey: weatherCredentials?.qweatherApiKey || qweatherLegacy?.apiKey,
@@ -53,6 +64,20 @@ export function normalizeConfigurationSnapshot(
 			? normalizeDashboardModuleConfig(card.kind, card.moduleConfig)
 			: card.moduleConfig,
 	}));
+	const firstCheckInCardId = personalDashboardLayout.find((card) => card.kind === 'check-in')?.id ?? null;
+	const legacyCheckInHistory = normalizeCheckInHistory((settingsSource as unknown as { checkInHistory?: unknown } | undefined)?.checkInHistory);
+	if (firstCheckInCardId && Object.keys(legacyCheckInHistory).length > 0 && !migratedPersonalSettings.checkInHistories[firstCheckInCardId]) {
+		migratedPersonalSettings = {
+			...migratedPersonalSettings,
+			checkInHistories: { ...migratedPersonalSettings.checkInHistories, [firstCheckInCardId]: legacyCheckInHistory },
+		};
+	}
+	for (const card of personalDashboardLayout) {
+		if ((card.kind === 'calendar' || card.kind === 'heatmap') && firstCheckInCardId) {
+			const config = card.moduleConfig as { useCheckInData?: boolean; checkInCardId?: string | null } | undefined;
+			if (config?.useCheckInData && !config.checkInCardId) config.checkInCardId = firstCheckInCardId;
+		}
+	}
 	const templateIdsByLegacyId = new Map<string, string[]>();
 	const taskTemplates = (snapshot.taskTemplates ?? []).flatMap((template) => {
 		const normalizedTemplate = {
@@ -80,6 +105,7 @@ export function normalizeConfigurationSnapshot(
 	const customFields = [...new Map(projects.flatMap((project) => project.customFields).map((field) => [field.key, field])).values()];
 	return {
 		...structuredClone(snapshot),
+		globalConfig: normalizeGlobalPeopleConfig(snapshot.globalConfig),
 		projects,
 		tagOrder: [...(snapshot.tagOrder ?? [])],
 		tagStyles: structuredClone(snapshot.tagStyles ?? {}),
@@ -93,7 +119,10 @@ export function normalizeConfigurationSnapshot(
 		savedProjectFilters: structuredClone(snapshot.savedProjectFilters ?? []),
 		personalDashboardLayout,
 		personalDashboardSettings: migratedPersonalSettings,
+		taskMetadataSettings: normalizeTaskMetadataSettings(snapshot.taskMetadataSettings),
 		projectViewDisplay: normalizeProjectViewDisplay(snapshot.projectViewDisplay, customFields),
+		peopleSourceSettings: normalizePeopleSourceSettings(snapshot.peopleSourceSettings),
+		nativeSidebarSettings: normalizeNativeSidebarSettings(snapshot.nativeSidebarSettings),
 	};
 }
 

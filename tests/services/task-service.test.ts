@@ -10,6 +10,7 @@ const globalConfig: GlobalConfig = {
 		{ id: '8a67a66f-0109-47b3-9463-5d05b4295949', name: '张三', active: true },
 		{ id: '9b67a66f-0109-47b3-9463-5d05b4295949', name: '李四', active: true },
 	],
+	personMetadataFields: [],
 };
 const project: ProjectConfig = {
 	kind: 'project', schema: 1, uid: '778de407-26bf-45ee-b22e-cf1f0bc826ce', code: 'PROJ', name: '项目', active: true,

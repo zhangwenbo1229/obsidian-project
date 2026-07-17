@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildDateSnapshot, daysUntilDate } from '../../src/views/dashboard-modules/date-model';
+import { buildDateSnapshot, daysFromDate, daysUntilDate } from '../../src/views/dashboard-modules/date-model';
 
 describe('dashboard date model', () => {
 	it('builds current local date details with optional lunar, holiday, weekday and time', () => {
@@ -25,5 +25,13 @@ describe('dashboard date model', () => {
 		expect(daysUntilDate('2026-07-14', now, false)).toBe(0);
 		expect(daysUntilDate('2026-07-13', now, false)).toBe(-1);
 		expect(daysUntilDate('invalid', now, false)).toBeNull();
+	});
+
+	it('calculates count-up elapsed days from a past local date', () => {
+		const now = new Date(2026, 6, 14, 23, 59);
+		expect(daysFromDate('2026-07-01', now, false)).toBe(13);
+		expect(daysFromDate('2026-07-01', now, true)).toBe(14);
+		expect(daysFromDate('2026-07-15', now, false)).toBeNull();
+		expect(daysFromDate('invalid', now, false)).toBeNull();
 	});
 });

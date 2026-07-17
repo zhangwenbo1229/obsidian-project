@@ -23,7 +23,17 @@ describe('dashboard calendar model', () => {
 		expect(nationalDay?.holiday).toBe('国庆');
 		expect(nationalDay?.lunarLabel).toBeTruthy();
 		expect(formatChineseLunarDay(new Date(2026, 9, 1))).not.toContain('年');
-		expect(formatChineseLunarDay(new Date(2026, 1, 17))).toMatch(/正月|初一/u);
+		expect(formatChineseLunarDay(new Date(2026, 1, 17))).toBe('初一');
+		expect(nationalDay?.lunarLabel).not.toMatch(/月/u);
+	});
+
+	it('uses canonical Chinese lunar day names without a lunar month prefix', () => {
+		const labels = buildCalendarMonth(2026, 1, '2026-02-17', 1, true, false).cells
+			.filter((cell) => cell.inCurrentMonth)
+			.map((cell) => cell.lunarLabel);
+		expect(labels).toContain('初一');
+		expect(labels.some((label) => label?.includes('十一'))).toBe(true);
+		expect(labels.every((label) => !label?.includes('月'))).toBe(true);
 	});
 
 	it('controls lunar and holiday annotations independently', () => {

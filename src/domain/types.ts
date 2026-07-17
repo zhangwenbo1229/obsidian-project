@@ -6,16 +6,17 @@ export type IsoSchedule = string;
 export type StatusCategory = 'todo' | 'in_progress' | 'done';
 export type CompletionResult = 'completed' | 'terminated';
 export type TaskPriority = 'high' | 'medium' | 'low';
+export type ProjectPriority = string;
 
 export type TaskFormField =
 	| 'title'
 	| 'priority'
 	| 'reporter'
 	| 'assignee'
+	| 'scheduledDate'
 	| 'startDate'
 	| 'dueDate'
-	| 'completedAt'
-	| 'terminatedAt'
+	| 'endDate'
 	| 'tags'
 	| 'body'
 	| 'links'
@@ -30,6 +31,22 @@ export interface TaskFieldRule {
 	defaultValue?: unknown;
 	icon?: string;
 	color?: string;
+	options?: CustomFieldOption[];
+}
+
+export interface EmbeddedSubtask {
+	id: string;
+	title: string;
+	completed: boolean;
+	priority: TaskPriority;
+	scheduledDate: IsoDate | null;
+	startDate: IsoSchedule | null;
+	dueDate: IsoSchedule | null;
+	tags: string[];
+	createdDate: IsoDate | null;
+	doneDate: IsoDate | null;
+	cancelledDate: IsoDate | null;
+	custom?: Record<string, unknown>;
 }
 
 export type TaskFieldConfig = Partial<Record<TaskFormField, TaskFieldRule>>;
@@ -38,6 +55,36 @@ export interface Person {
 	id: Uuid;
 	name: string;
 	active: boolean;
+	sourcePath?: string;
+	metadata?: Record<string, unknown>;
+}
+
+export type PersonMetadataFieldType =
+	| 'text'
+	| 'multiline-text'
+	| 'number'
+	| 'boolean'
+	| 'date'
+	| 'datetime'
+	| 'single-select'
+	| 'multi-select';
+
+export interface PersonMetadataFieldDefinition {
+	id: string;
+	key: string;
+	title: string;
+	type: PersonMetadataFieldType;
+	active: boolean;
+	sourceProperty?: string;
+	icon?: string;
+	color?: string;
+	options?: CustomFieldOption[];
+}
+
+export interface PersonNamePresentation {
+	title: string;
+	icon?: string;
+	color?: string;
 }
 
 export interface GlobalConfig {
@@ -47,6 +94,8 @@ export interface GlobalConfig {
 	defaultTaskDirectory: string;
 	currentUserId: Uuid;
 	people: Person[];
+	personMetadataFields: PersonMetadataFieldDefinition[];
+	personNamePresentation?: PersonNamePresentation;
 }
 
 export interface TaskTypeDefinition {
@@ -151,10 +200,14 @@ export interface ProjectFilterDefinition {
 	statusCategories?: string[];
 	createdAtFrom?: string;
 	createdAtTo?: string;
+	scheduledDateFrom?: string;
+	scheduledDateTo?: string;
 	startDateFrom?: string;
 	startDateTo?: string;
 	dueDateFrom?: string;
 	dueDateTo?: string;
+	endDateFrom?: string;
+	endDateTo?: string;
 	completedAtFrom?: string;
 	completedAtTo?: string;
 	hasIncompleteSubtasks?: boolean;
@@ -190,8 +243,10 @@ export type BuiltInTaskDisplayField =
 	| 'priority'
 	| 'reporter'
 	| 'assignee'
+	| 'scheduledDate'
 	| 'startDate'
 	| 'dueDate'
+	| 'endDate'
 	| 'tags'
 	| 'customFields'
 	| 'relations'
@@ -202,7 +257,7 @@ export type CustomTaskDisplayField = `custom:${string}`;
 export type TaskDisplayField = BuiltInTaskDisplayField | CustomTaskDisplayField | 'customFields';
 
 export type PersonalDashboardCardId = string;
-export type DashboardModuleKind = 'weather' | 'calendar' | 'date' | 'todo' | 'note-stats' | 'recent-files' | 'news' | 'directory' | 'text' | 'chart' | 'countdown' | 'heatmap';
+export type DashboardModuleKind = 'weather' | 'calendar' | 'date' | 'todo' | 'note-stats' | 'recent-files' | 'news' | 'directory' | 'text' | 'chart' | 'countdown' | 'progress' | 'check-in' | 'heatmap' | 'iframe';
 export type DashboardCardKind = 'number' | 'percentage' | 'task-list' | DashboardModuleKind;
 export type DashboardMetric =
 	| 'total'
@@ -234,6 +289,7 @@ export interface PersonalDashboardCardLayout {
 	percentageTarget?: number;
 	percentageValue?: number;
 	percentageDisplay?: 'number' | 'progress';
+	percentageProgressStyle?: 'linear' | 'semicircle';
 	moduleConfig?: DashboardModuleConfig;
 }
 
@@ -253,6 +309,10 @@ export interface CalendarDashboardModuleConfig {
 	showLunar: boolean;
 	showHolidays: boolean;
 	weekStartsOn: 0 | 1;
+	useCheckInData: boolean;
+	checkInCardId: string | null;
+	checkInColor: string;
+	checkInIcon: string;
 }
 
 export interface NoteStatsDashboardModuleConfig {
@@ -301,6 +361,10 @@ export interface TextDashboardModuleConfig {
 	markdown: string;
 }
 
+export interface IframeDashboardModuleConfig {
+	url: string;
+}
+
 export type DashboardChartType = 'line' | 'bar' | 'pie';
 
 export interface ChartDashboardModuleConfig {
@@ -328,9 +392,11 @@ export interface TodoDashboardModuleConfig {
 	excludePaths: string[];
 	limit: number;
 	showSource: boolean;
+	showMetadata: boolean;
 }
 
 export interface CountdownDashboardModuleConfig {
+	mode: 'countdown' | 'countup';
 	targetDate: string;
 	eventName: string;
 	includeToday: boolean;
@@ -342,6 +408,24 @@ export interface HeatmapDashboardModuleConfig {
 	excludePaths: string[];
 	days: number;
 	color: string;
+	useCheckInData: boolean;
+	checkInCardId: string | null;
+}
+
+export interface TimeProgressDashboardModuleConfig {
+	showWeek: boolean;
+	showMonth: boolean;
+	showYear: boolean;
+	fillColor: string;
+	trackColor: string;
+}
+
+export interface CheckInDashboardModuleConfig {
+	dailyTarget: number;
+	buttonLabel: string;
+	showStreak: boolean;
+	showTotalDays: boolean;
+	progressStyle: 'linear' | 'semicircle';
 }
 
 export type DashboardModuleConfig =
@@ -352,10 +436,13 @@ export type DashboardModuleConfig =
 	| NewsDashboardModuleConfig
 	| DirectoryDashboardModuleConfig
 	| TextDashboardModuleConfig
+	| IframeDashboardModuleConfig
 	| ChartDashboardModuleConfig
 	| DateDashboardModuleConfig
 	| TodoDashboardModuleConfig
 	| CountdownDashboardModuleConfig
+	| TimeProgressDashboardModuleConfig
+	| CheckInDashboardModuleConfig
 	| HeatmapDashboardModuleConfig;
 
 export interface TaskMetadata {
@@ -366,10 +453,12 @@ export interface TaskMetadata {
 	projectUid: Uuid;
 	title: string;
 	taskTypeId: string;
-	priority?: TaskPriority;
+	priority?: ProjectPriority;
 	createdAt: IsoDateTime;
+	scheduledDate?: IsoSchedule | null;
 	startDate: IsoSchedule | null;
 	dueDate: IsoSchedule | null;
+	endDate?: IsoSchedule | null;
 	completedAt: IsoDateTime | null;
 	terminatedAt: IsoDateTime | null;
 	reporterId: Uuid;

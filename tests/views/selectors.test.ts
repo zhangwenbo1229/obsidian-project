@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { IndexedTask } from '../../src/index/task-index';
 import { activeProjectFilterCount, ALL_PROJECTS_UID, buildTagTree, calendarItems, classifyTaskQuadrants, filterPersonalTasks, filterProjectTasks, overdueTasks, pendingTasks, taskStatistics } from '../../src/views/selectors';
+import * as selectors from '../../src/views/selectors';
 
 function indexed(key: string, title: string, dueDate: string | null): IndexedTask {
 	const project = {
@@ -69,6 +70,25 @@ describe('view selectors', () => {
 		expect(result.importantNotUrgent).toEqual([importantNotUrgent]);
 		expect(result.notImportantUrgent).toEqual([notImportantUrgent]);
 		expect(result.notImportantNotUrgent).toEqual([notImportantNotUrgent]);
+	});
+
+	it('uses configured important priorities and urgent-day threshold', () => {
+		const configured = indexed('PROJ-5', '中优先级七日内到期', '2026-07-19');
+		configured.document.metadata.priority = 'medium';
+		const result = classifyTaskQuadrants([configured], '2026-07-12', {
+			importantPriorities: ['high', 'medium'], urgentWithinDays: 7,
+		});
+		expect(result.importantUrgent).toEqual([configured]);
+	});
+
+	it('maps vertical quadrant drops to the nearest configured priority tier', () => {
+		const priorityForQuadrantDrop = (selectors as unknown as {
+			priorityForQuadrantDrop?: (current: 'high' | 'medium' | 'low', quadrant: string, important: Array<'high' | 'medium' | 'low'>) => string;
+		}).priorityForQuadrantDrop;
+		expect(typeof priorityForQuadrantDrop).toBe('function');
+		expect(priorityForQuadrantDrop?.('high', 'notImportantUrgent', ['high'])).toBe('medium');
+		expect(priorityForQuadrantDrop?.('low', 'importantNotUrgent', ['high', 'medium'])).toBe('high');
+		expect(priorityForQuadrantDrop?.('medium', 'importantUrgent', ['high', 'medium'])).toBe('medium');
 	});
 
 	it('filters personal tasks by start date periods and excludes tasks without a start date', () => {
@@ -191,21 +211,37 @@ describe('view selectors', () => {
 		expect(overdueTasks([today, completed, overdue], '2026-07-12').map((item) => item.document.metadata.key)).toEqual(['PROJ-1']);
 	});
 
-	it('shows only due dates and optional start ranges on the calendar', () => {
-		const due = indexed('PROJ-1', '有日期', '2026-07-20');
-		due.document.metadata.startDate = '2026-07-18';
-		const noDue = indexed('PROJ-2', '只有开始', null);
-		noDue.document.metadata.startDate = '2026-07-18';
-		expect(calendarItems([due, noDue])).toEqual([
-			{ uid: due.document.metadata.uid, key: 'PROJ-1', title: '有日期', start: '2026-07-18', end: '2026-07-20' },
+	it('uses plan-to-deadline before start-to-end for calendar spans', () => {
+		const planned = indexed('PROJ-1', '计划区间', '2026-07-20');
+		planned.document.metadata.scheduledDate = '2026-07-18';
+		planned.document.metadata.startDate = '2026-07-10';
+		planned.document.metadata.endDate = '2026-07-30';
+		const execution = indexed('PROJ-2', '执行区间', null);
+		execution.document.metadata.startDate = '2026-07-21';
+		execution.document.metadata.endDate = '2026-07-24';
+		expect(calendarItems([planned, execution])).toEqual([
+			{ uid: planned.document.metadata.uid, key: 'PROJ-1', title: '计划区间', start: '2026-07-18', end: '2026-07-20' },
+			{ uid: execution.document.metadata.uid, key: 'PROJ-2', title: '执行区间', start: '2026-07-21', end: '2026-07-24' },
 		]);
 	});
 
-	it('keeps a task on its due date when its invalid start date is later than its due date', () => {
-		const task = indexed('PROJ-1', '反向日期', '2026-07-05');
-		task.document.metadata.startDate = '2026-07-13';
-		expect(calendarItems([task])).toEqual([
-			{ uid: task.document.metadata.uid, key: 'PROJ-1', title: '反向日期', start: '2026-07-05', end: '2026-07-05' },
+	it('selects the configured single date or execution range for calendar items', () => {
+		const task = indexed('PROJ-6', '日期来源', '2026-07-20');
+		task.document.metadata.scheduledDate = '2026-07-18';
+		task.document.metadata.startDate = '2026-07-10';
+		task.document.metadata.endDate = '2026-07-12';
+		expect(calendarItems([task], 'dueDate')[0]).toMatchObject({ start: '2026-07-20', end: '2026-07-20' });
+		expect(calendarItems([task], 'execution-range')[0]).toMatchObject({ start: '2026-07-10', end: '2026-07-12' });
+	});
+
+	it('supports single dates and clamps reversed calendar ranges to their end date', () => {
+		const scheduled = indexed('PROJ-1', '只有计划日期', null);
+		scheduled.document.metadata.scheduledDate = '2026-07-18';
+		const reversed = indexed('PROJ-2', '反向日期', '2026-07-05');
+		reversed.document.metadata.scheduledDate = '2026-07-13';
+		expect(calendarItems([scheduled, reversed])).toEqual([
+			{ uid: scheduled.document.metadata.uid, key: 'PROJ-1', title: '只有计划日期', start: '2026-07-18', end: '2026-07-18' },
+			{ uid: reversed.document.metadata.uid, key: 'PROJ-2', title: '反向日期', start: '2026-07-05', end: '2026-07-05' },
 		]);
 	});
 

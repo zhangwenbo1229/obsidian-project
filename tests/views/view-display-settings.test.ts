@@ -6,6 +6,7 @@ const modelUrl = new URL('../../src/views/task-display-settings.ts', import.meta
 const editorUrl = new URL('../../src/settings/view-display-editor.ts', import.meta.url);
 const settings = readFileSync(new URL('../../src/settings/settings-tab.ts', import.meta.url), 'utf8');
 const project = readFileSync(new URL('../../src/views/project-view.ts', import.meta.url), 'utf8');
+const projectList = readFileSync(new URL('../../src/views/project-list-renderer.ts', import.meta.url), 'utf8');
 const cardFields = readFileSync(new URL('../../src/views/task-card-fields.ts', import.meta.url), 'utf8');
 
 describe('project view display settings', () => {
@@ -34,6 +35,21 @@ describe('project view display settings', () => {
 		expect(cardFields).toContain("field === 'relations'");
 		expect(cardFields).toContain("field === 'links'");
 		expect(cardFields).toContain("field === 'subtasks'");
+		expect(cardFields).toContain('resolveTaskFieldPresentation');
+		expect(project).toContain('renderProjectList');
+		expect(projectList).toContain('renderTaskListField');
+	});
+
+	it('exposes all four project date fields with distinct labels', () => {
+		expect(displaySettings.TASK_DISPLAY_FIELD_LABELS.scheduledDate).toBe('计划日期');
+		expect(displaySettings.TASK_DISPLAY_FIELD_LABELS.dueDate).toBe('截止日期');
+		expect(displaySettings.TASK_DISPLAY_FIELD_LABELS.startDate).toBe('开始日期');
+		expect(displaySettings.TASK_DISPLAY_FIELD_LABELS.endDate).toBe('结束日期');
+	});
+
+	it('labels the structured subtask column as tasks', () => {
+		expect(displaySettings.TASK_DISPLAY_FIELD_LABELS.subtasks).toBe('任务');
+		expect(project).toContain("subtasks: { id: 'subtasks', name: '任务' }");
 	});
 
 	it('uses four subpages and draggable ordered field rows', () => {
@@ -47,8 +63,7 @@ describe('project view display settings', () => {
 		expect(editor).toContain('保存当前模式');
 		expect(editor).toContain('恢复当前模式默认值');
 		expect(editor).toContain('DEFAULT_PROJECT_VIEW_DISPLAY');
-		expect(editor).toContain('this.value[mode] = [...this.manager.projectViewDisplay[mode]]');
-		expect(editor).not.toContain('this.value = normalizeProjectViewDisplay(this.manager.projectViewDisplay');
+		expect(editor).toContain('this.value = normalizeProjectViewDisplay(this.manager.projectViewDisplay');
 	});
 
 	it('exposes custom fields as independently configurable display entries', () => {
@@ -70,5 +85,47 @@ describe('project view display settings', () => {
 			list: ['key', 'customFields', 'title'],
 		}, [{ key: 'review-at', name: '评审时间' }, { key: 'risk', name: '风险' }] as never[]);
 		expect(normalized.list).toEqual(['key', 'custom:review-at', 'custom:risk', 'title']);
+	});
+
+	it('normalizes board, calendar and quadrant behavior rules without breaking legacy field arrays', () => {
+		const normalized = displaySettings.normalizeProjectViewDisplay({
+			board: ['key', 'title'],
+			behavior: {
+				board: { groupStatusIds: { todo: ['waiting'], in_progress: ['doing'], done: ['done'] }, showCompletedColumn: false, autoUpdateStatusOnDrop: false },
+				calendar: { dateSource: 'dueDate', autoUpdateDateOnDrop: true },
+				quadrants: { importantPriorities: ['high', 'medium'], urgentWithinDays: 14 },
+			},
+		} as never);
+		expect(normalized.board).toEqual(['key', 'title']);
+		expect(normalized.behavior.board).toMatchObject({ showCompletedColumn: false, autoUpdateStatusOnDrop: false });
+		expect(normalized.behavior.calendar).toEqual({ dateSource: 'dueDate', autoUpdateDateOnDrop: true });
+		expect(normalized.behavior.quadrants).toEqual({ importantPriorities: ['high', 'medium'], urgentWithinDays: 14 });
+	});
+
+	it('assigns newly introduced workflow statuses to their status category', () => {
+		const normalized = displaySettings.normalizeProjectViewDisplay({
+			behavior: { board: { groupStatusIds: { todo: ['waiting'], in_progress: [], done: [] } } },
+		} as never, [], [
+			{ id: 'waiting', category: 'todo' },
+			{ id: 'review', category: 'in_progress' },
+			{ id: 'released', category: 'done' },
+		]);
+		expect(normalized.behavior.board.groupStatusIds).toEqual({
+			todo: ['waiting'], in_progress: ['review'], done: ['released'],
+		});
+	});
+
+	it('renders behavior controls in the matching settings subpages', () => {
+		const editor = readFileSync(editorUrl, 'utf8');
+		for (const label of ['状态分组', '显示已完成列', '拖拽时自动调整工作流状态', '日历日期来源', '拖拽时自动写入日期', '重要优先级', '紧急期限']) {
+			expect(editor).toContain(label);
+		}
+	});
+
+	it('uses one priority multi-select instead of one toggle per priority', () => {
+		const editor = readFileSync(editorUrl, 'utf8');
+		expect(editor).toContain('op-priority-multi-select');
+		expect(editor).toContain("type: 'checkbox'");
+		expect(editor).not.toContain("setName(`${label}优先级`).addToggle");
 	});
 });

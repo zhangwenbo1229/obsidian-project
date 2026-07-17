@@ -40,3 +40,10 @@ export function daysUntilDate(targetDate: string, now: Date, includeToday: boole
 	const difference = Math.round((targetUtc - todayUtc) / 86_400_000);
 	return includeToday && difference > 0 ? difference + 1 : difference;
 }
+
+export function daysFromDate(startDate: string, now: Date, includeToday: boolean): number | null {
+	const difference = daysUntilDate(startDate, now, false);
+	if (difference === null || difference > 0) return null;
+	const elapsed = Math.abs(difference);
+	return includeToday ? elapsed + 1 : elapsed;
+}

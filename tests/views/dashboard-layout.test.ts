@@ -3,6 +3,7 @@ import * as dashboardLayout from '../../src/views/dashboard-layout';
 
 const {
 	bindDashboardFilter,
+	createDashboardCard,
 	defaultDashboardCardBackground,
 	normalizeDashboardLayout,
 	reorderDashboardCards,
@@ -12,6 +13,18 @@ const {
 } = dashboardLayout;
 
 describe('personal dashboard layout', () => {
+	it('normalizes percentage progress presentation styles', () => {
+		const card = createDashboardCard('percentage-custom', 'percentage', 8);
+		const normalized = normalizeDashboardLayout([{ ...card, percentageDisplay: 'progress', percentageProgressStyle: 'semicircle' }]);
+		expect(normalized.find((item) => item.id === 'percentage-custom')).toMatchObject({ percentageProgressStyle: 'semicircle' });
+	});
+
+	it('supports a wider card font range for compact and presentation cards', () => {
+		const small = normalizeDashboardLayout([{ ...createDashboardCard('font-small', 'number', 8), fontSize: 6 }]);
+		const large = normalizeDashboardLayout([{ ...createDashboardCard('font-large', 'number', 8), fontSize: 48 }]);
+		expect(small.find((item) => item.id === 'font-small')?.fontSize).toBe(8);
+		expect(large.find((item) => item.id === 'font-large')?.fontSize).toBe(40);
+	});
 	it('normalizes, reorders, resizes, and binds cards', () => {
 		const layout = normalizeDashboardLayout([]);
 		expect(layout.map((card) => card.id)).toEqual([
@@ -142,7 +155,7 @@ describe('personal dashboard layout', () => {
 			percentageDataMode: 'direct', percentageValue: 135,
 		}] as never[]);
 		expect(cards.find((card) => card.id === 'direct-percentage')).toMatchObject({
-			fontSize: 28, percentageDataMode: 'direct', percentageValue: 100,
+			fontSize: 40, percentageDataMode: 'direct', percentageValue: 100,
 		});
 		expect(normalizeDashboardLayout([])[0]?.fontSize).toBe(14);
 	});

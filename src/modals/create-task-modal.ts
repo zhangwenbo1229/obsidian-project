@@ -1,15 +1,16 @@
 import { Modal, Notice, Setting } from 'obsidian';
-import type { ProjectConfig, TaskFormField, TaskPriority, TaskRelation, TaskTypeDefinition } from '../domain/types';
+import type { ProjectConfig, ProjectPriority, TaskFormField, TaskRelation, TaskTypeDefinition } from '../domain/types';
 import type { ProjectManager } from '../services/project-manager';
 import { resolveTaskTypeTemplate, switchTaskTypeDraft, switchTaskTypeFieldDrafts } from '../services/task-service';
 import { fromDateTimeLocalInput, toDateTimeLocalInput } from '../utils/dates';
 import { buildTaskDialogShell } from './task-dialog';
 import { renderMarkdownEditor, type MarkdownEditorHandle } from './markdown-editor';
 import { createUuid } from '../utils/ids';
-import { taskFieldDefault, taskFieldEnabled, taskFieldRule } from '../settings/task-field-configuration';
+import { taskFieldDefault, taskFieldEnabled, taskFieldOptions, taskFieldRule } from '../settings/task-field-configuration';
 import { validateConfiguredTaskFields } from '../services/task-field-validation';
 import { renderGroupedTagPicker } from './grouped-tag-picker';
 import { applyFieldPresentation } from '../views/field-presentation';
+import { renderSubtaskListEditor } from './subtask-list-editor';
 
 function fieldSetting(container: HTMLElement, name: string, type: TaskTypeDefinition | undefined, field: TaskFormField): Setting {
 	const setting = new Setting(container).setName(name);
@@ -27,11 +28,13 @@ export class CreateTaskModal extends Modal {
 	private project: ProjectConfig | undefined;
 	private title = '';
 	private taskTypeId = 'task';
-	private priority: TaskPriority = 'medium';
+	private priority: ProjectPriority = 'medium';
 	private reporterId: string;
 	private assigneeId: string | null = null;
+	private scheduledDate: string | null = null;
 	private startDate: string | null = null;
 	private dueDate: string | null = null;
+	private endDate: string | null = null;
 	private tags: string[] = [];
 	private custom: Record<string, unknown> = {};
 	private body = '';
@@ -56,7 +59,7 @@ export class CreateTaskModal extends Modal {
 	}
 
 	onOpen(): void {
-		this.setTitle('新增任务');
+		this.setTitle('新增项目');
 		this.render();
 	}
 
@@ -67,18 +70,16 @@ export class CreateTaskModal extends Modal {
 	private render(): void {
 		this.clearMarkdownEditors();
 		const shell = buildTaskDialogShell(this.contentEl, {
-			subtitle: '填写任务信息并创建到所选项目。',
+			subtitle: '填写项目信息并创建到所选分组。',
 		});
 		const taskType = this.currentTaskType();
 		const presentation = (field: TaskFormField) => taskFieldRule(taskType, field);
 		const identityEl = shell.createSection('基本信息');
 		const planningEl = shell.createSection('计划与人员');
-		const customEl = taskFieldEnabled(taskType, 'customFields') ? shell.createSection('自定义字段', undefined, presentation('customFields')) : null;
-		customEl?.addClass('op-task-custom-fields');
-		const bodyEl = taskFieldEnabled(taskType, 'body') ? shell.createSection('任务正文', 'op-task-dialog-section-wide', presentation('body')) : null;
+		const bodyEl = taskFieldEnabled(taskType, 'body') ? shell.createSection('项目描述', 'op-task-dialog-section-wide', presentation('body')) : null;
 		const linksEl = taskFieldEnabled(taskType, 'links') ? shell.createSection('链接', 'op-task-dialog-section-wide', presentation('links')) : null;
-		const subtasksEl = taskFieldEnabled(taskType, 'subtasks') ? shell.createSection('子任务', 'op-task-dialog-section-wide', presentation('subtasks')) : null;
-		const relationsEl = taskFieldEnabled(taskType, 'relations') ? shell.createSection('任务关系', 'op-task-dialog-section-wide', presentation('relations')) : null;
+		const subtasksEl = taskFieldEnabled(taskType, 'subtasks') ? shell.createSection('任务', 'op-task-dialog-section-wide', presentation('subtasks')) : null;
+		const relationsEl = taskFieldEnabled(taskType, 'relations') ? shell.createSection('项目关系', 'op-task-dialog-section-wide', presentation('relations')) : null;
 		const notesEl = taskFieldEnabled(taskType, 'notes') ? shell.createSection('备注', 'op-task-dialog-section-wide', presentation('notes')) : null;
 
 		new Setting(identityEl).setName('项目').addDropdown((dropdown) => {
@@ -119,12 +120,10 @@ export class CreateTaskModal extends Modal {
 				this.render();
 			});
 		});
-		if (taskFieldEnabled(taskType, 'priority')) fieldSetting(identityEl, '优先级', taskType, 'priority').addDropdown((dropdown) => dropdown
-			.addOption('high', '高')
-			.addOption('medium', '中')
-			.addOption('low', '低')
-			.setValue(this.priority)
-			.onChange((value) => (this.priority = value as TaskPriority)));
+		if (taskFieldEnabled(taskType, 'priority')) fieldSetting(identityEl, '优先级', taskType, 'priority').addDropdown((dropdown) => {
+			for (const option of taskFieldOptions(taskType, 'priority')) dropdown.addOption(option.id, option.name);
+			dropdown.setValue(this.priority).onChange((value) => (this.priority = value));
+		});
 		if (taskFieldEnabled(taskType, 'title')) fieldSetting(identityEl, '标题', taskType, 'title').addText((text) =>
 			text.setValue(this.title).onChange((value) => (this.title = value)),
 		);
@@ -139,13 +138,21 @@ export class CreateTaskModal extends Modal {
 			}
 			dropdown.setValue(this.assigneeId ?? '').onChange((value) => (this.assigneeId = value || null));
 		});
+		if (taskFieldEnabled(taskType, 'scheduledDate')) fieldSetting(planningEl, '计划日期', taskType, 'scheduledDate').addText((text) => {
+			text.inputEl.type = 'datetime-local';
+			text.setValue(toDateTimeLocalInput(this.scheduledDate)).onChange((value) => (this.scheduledDate = fromDateTimeLocalInput(value)));
+		});
+		if (taskFieldEnabled(taskType, 'dueDate')) fieldSetting(planningEl, '截止日期', taskType, 'dueDate').addText((text) => {
+			text.inputEl.type = 'datetime-local';
+			text.setValue(toDateTimeLocalInput(this.dueDate)).onChange((value) => (this.dueDate = fromDateTimeLocalInput(value)));
+		});
 		if (taskFieldEnabled(taskType, 'startDate')) fieldSetting(planningEl, '开始日期', taskType, 'startDate').addText((text) => {
 			text.inputEl.type = 'datetime-local';
 			text.setValue(toDateTimeLocalInput(this.startDate)).onChange((value) => (this.startDate = fromDateTimeLocalInput(value)));
 		});
-		if (taskFieldEnabled(taskType, 'dueDate')) fieldSetting(planningEl, '计划完成日期', taskType, 'dueDate').addText((text) => {
+		if (taskFieldEnabled(taskType, 'endDate')) fieldSetting(planningEl, '结束日期', taskType, 'endDate').addText((text) => {
 			text.inputEl.type = 'datetime-local';
-			text.setValue(toDateTimeLocalInput(this.dueDate)).onChange((value) => (this.dueDate = fromDateTimeLocalInput(value)));
+			text.setValue(toDateTimeLocalInput(this.endDate)).onChange((value) => (this.endDate = fromDateTimeLocalInput(value)));
 		});
 		if (taskFieldEnabled(taskType, 'tags')) renderGroupedTagPicker(
 			planningEl,
@@ -154,8 +161,8 @@ export class CreateTaskModal extends Modal {
 			(tags) => (this.tags = tags),
 			presentation('tags'),
 		);
-		for (const field of customEl ? this.project?.customFields.filter((item) => item.active && (!item.taskTypeIds || item.taskTypeIds.includes(this.taskTypeId))) ?? [] : []) {
-			const setting = new Setting(customEl!).setName(field.name);
+		for (const field of this.project?.customFields.filter((item) => item.active && (!item.taskTypeIds || item.taskTypeIds.includes(this.taskTypeId))) ?? []) {
+			const setting = new Setting(planningEl).setName(field.name);
 			applyFieldPresentation(setting, field);
 			if (field.type === 'boolean') {
 				setting.addToggle((toggle) => toggle.setValue(Boolean(this.custom[field.key] ?? field.default)).onChange((value) => (this.custom[field.key] = value)));
@@ -196,9 +203,6 @@ export class CreateTaskModal extends Modal {
 				}));
 			}
 		}
-		if (customEl && customEl.childElementCount === 0) {
-			customEl.createDiv({ cls: 'op-task-dialog-empty', text: '当前项目没有启用自定义字段。' });
-		}
 		if (bodyEl) this.markdownEditors.push(renderMarkdownEditor({
 			app: this.manager.app,
 			container: bodyEl,
@@ -214,18 +218,18 @@ export class CreateTaskModal extends Modal {
 				area.inputEl.addClass('op-markdown-editor', 'is-compact');
 				area.setPlaceholder('- [[相关文档]]').setValue(this.links).onChange((value) => (this.links = value));
 			});
-		if (subtasksEl) this.markdownEditors.push(renderMarkdownEditor({
-			app: this.manager.app,
-			container: subtasksEl,
+		if (subtasksEl) renderSubtaskListEditor(subtasksEl, {
+			manager: this.manager,
 			value: this.subtasks,
+			parent: null,
+			parentLabel: this.title.trim() ? `未保存项目 · ${this.title.trim()}` : '当前未保存项目',
 			onChange: (value) => (this.subtasks = value),
-			sourcePath: this.project?.taskDirectory ?? '',
-			placeholder: '- [ ] 使用 Markdown 记录子任务',
-		}));
+			onRerender: () => this.render(),
+		});
 		if (relationsEl) this.renderRelations(relationsEl);
 		if (notesEl) new Setting(notesEl)
 			.setName('首条备注')
-			.setDesc('创建任务时作为第一条结构化备注保存。')
+			.setDesc('创建项目时作为第一条结构化备注保存。')
 			.addDropdown((dropdown) => {
 				for (const person of this.manager.globalConfig.people.filter((item) => item.active)) dropdown.addOption(person.id, person.name);
 				dropdown.setValue(this.noteAuthorId).onChange((value) => (this.noteAuthorId = value));
@@ -239,7 +243,7 @@ export class CreateTaskModal extends Modal {
 			placeholder: '记录上下文、评审结论或后续动作。',
 		}));
 		new Setting(shell.footerEl).addButton((button) =>
-			button.setButtonText('创建任务').setCta().onClick(() => void this.submit()),
+			button.setButtonText('创建项目').setCta().onClick(() => void this.submit()),
 		);
 	}
 
@@ -261,11 +265,13 @@ export class CreateTaskModal extends Modal {
 	private defaultFieldValues(type = this.currentTaskType()): Record<string, unknown> {
 		return {
 			title: taskFieldDefault<string>(type, 'title') ?? '',
-			priority: taskFieldDefault<TaskPriority>(type, 'priority') ?? 'medium',
+			priority: taskFieldDefault<ProjectPriority>(type, 'priority') ?? taskFieldOptions(type, 'priority')[0]?.id ?? 'medium',
 			reporterId: taskFieldDefault<string | null>(type, 'reporter') || this.manager.globalConfig.currentUserId,
 			assigneeId: taskFieldDefault<string | null>(type, 'assignee') ?? null,
+			scheduledDate: taskFieldDefault<string | null>(type, 'scheduledDate') ?? null,
 			startDate: taskFieldDefault<string | null>(type, 'startDate') ?? null,
 			dueDate: taskFieldDefault<string | null>(type, 'dueDate') ?? null,
+			endDate: taskFieldDefault<string | null>(type, 'endDate') ?? null,
 			tags: [...(taskFieldDefault<string[]>(type, 'tags') ?? [])],
 			links: taskFieldDefault<string>(type, 'links') ?? '',
 			subtasks: taskFieldDefault<string>(type, 'subtasks') ?? '',
@@ -280,8 +286,10 @@ export class CreateTaskModal extends Modal {
 			priority: this.priority,
 			reporterId: this.reporterId,
 			assigneeId: this.assigneeId,
+			scheduledDate: this.scheduledDate,
 			startDate: this.startDate,
 			dueDate: this.dueDate,
+			endDate: this.endDate,
 			tags: [...this.tags],
 			links: this.links,
 			subtasks: this.subtasks,
@@ -292,11 +300,16 @@ export class CreateTaskModal extends Modal {
 
 	private applyFieldValues(values: Record<string, unknown>): void {
 		this.title = typeof values.title === 'string' ? values.title : '';
-		this.priority = values.priority === 'high' || values.priority === 'low' ? values.priority : 'medium';
+		const priorityOptions = taskFieldOptions(this.currentTaskType(), 'priority');
+		this.priority = typeof values.priority === 'string' && priorityOptions.some((option) => option.id === values.priority)
+			? values.priority
+			: priorityOptions[0]?.id ?? 'medium';
 		this.reporterId = typeof values.reporterId === 'string' && values.reporterId ? values.reporterId : this.manager.globalConfig.currentUserId;
 		this.assigneeId = typeof values.assigneeId === 'string' && values.assigneeId ? values.assigneeId : null;
+		this.scheduledDate = typeof values.scheduledDate === 'string' && values.scheduledDate ? values.scheduledDate : null;
 		this.startDate = typeof values.startDate === 'string' && values.startDate ? values.startDate : null;
 		this.dueDate = typeof values.dueDate === 'string' && values.dueDate ? values.dueDate : null;
+		this.endDate = typeof values.endDate === 'string' && values.endDate ? values.endDate : null;
 		this.tags = Array.isArray(values.tags) ? values.tags.filter((value): value is string => typeof value === 'string') : [];
 		this.links = typeof values.links === 'string' ? values.links : '';
 		this.subtasks = typeof values.subtasks === 'string' ? values.subtasks : '';
@@ -318,9 +331,9 @@ export class CreateTaskModal extends Modal {
 			!this.relations.some((relation) => relation.targetUid === task.document.metadata.uid),
 		);
 		new Setting(container)
-			.setName('添加关联任务')
+			.setName('添加关联项目')
 			.addDropdown((dropdown) => {
-				dropdown.addOption('', '选择任务');
+				dropdown.addOption('', '选择项目');
 				for (const task of candidates) dropdown.addOption(task.document.metadata.uid, `${task.document.metadata.key} · ${task.document.metadata.title}`);
 				dropdown.setValue(this.relationTargetUid).onChange((value) => (this.relationTargetUid = value));
 			})
@@ -354,8 +367,10 @@ export class CreateTaskModal extends Modal {
 			priority: this.priority,
 			reporter: this.reporterId,
 			assignee: this.assigneeId,
+			scheduledDate: this.scheduledDate,
 			startDate: this.startDate,
 			dueDate: this.dueDate,
+			endDate: this.endDate,
 			tags: this.tags,
 			body: this.body,
 			links: this.links,
@@ -371,7 +386,8 @@ export class CreateTaskModal extends Modal {
 		try {
 			const path = await this.manager.createTask({
 				project: this.project, title: this.title, taskTypeId: this.taskTypeId, priority: this.priority,
-				reporterId: this.reporterId, assigneeId: this.assigneeId, startDate: this.startDate, dueDate: this.dueDate,
+				reporterId: this.reporterId, assigneeId: this.assigneeId, scheduledDate: this.scheduledDate,
+				startDate: this.startDate, dueDate: this.dueDate, endDate: this.endDate,
 				tags: this.tags, custom: this.custom, body: this.body, links: this.links, subtasks: this.subtasks,
 				relations: this.relations, note: this.note, noteAuthorId: this.noteAuthorId,
 			});

@@ -10,7 +10,7 @@ import {
 const CARD_KIND_LABELS: Record<DashboardCardKind, string> = {
 	number: '数字卡片',
 	percentage: '百分比卡片',
-	'task-list': '任务列表卡片',
+	'task-list': '项目卡片',
 	weather: '天气卡片',
 	calendar: '日历卡片',
 	date: '日期卡片',
@@ -21,8 +21,11 @@ const CARD_KIND_LABELS: Record<DashboardCardKind, string> = {
 	directory: '目录卡片',
 	text: '文本卡片',
 	chart: '图表卡片',
-	countdown: '倒计日卡片',
+	countdown: '计时卡片',
+	progress: '进度卡片',
+	'check-in': '打卡卡片',
 	heatmap: '热力图卡片',
+	iframe: '网页卡片',
 };
 
 export class PersonalDashboardSettingsEditor {
@@ -81,8 +84,10 @@ export class PersonalDashboardSettingsEditor {
 					else enabled.delete(kind);
 					this.value = {
 						enabledCardKinds: ALL_DASHBOARD_CARD_KINDS.filter((candidate) => enabled.has(candidate)),
+						openPersonalDashboardOnStartup: this.value.openPersonalDashboardOnStartup,
 						weatherCredentials: this.value.weatherCredentials,
 						fileOpenCounts: this.value.fileOpenCounts,
+						checkInHistories: this.value.checkInHistories,
 					};
 				}));
 		}

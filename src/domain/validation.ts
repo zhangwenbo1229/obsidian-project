@@ -207,13 +207,13 @@ export function validateTaskMetadata(value: unknown): ValidationResult<TaskMetad
 	if (!nonEmptyString(value.taskTypeId)) issues.push(issue('invalid-task-type', 'taskTypeId', '任务类型不能为空。'));
 	if (
 		value.priority !== undefined &&
-		(typeof value.priority !== 'string' || !['high', 'medium', 'low'].includes(value.priority))
+		!nonEmptyString(value.priority)
 	) {
-		issues.push(issue('invalid-priority', 'priority', '优先级必须是 high、medium 或 low。'));
+		issues.push(issue('invalid-priority', 'priority', '优先级必须是非空文本。'));
 	}
 	if (!isIsoDateTimeWithOffset(value.createdAt)) issues.push(issue('invalid-datetime', 'createdAt', '创建时间必须包含时区。'));
-	for (const field of ['startDate', 'dueDate'] as const) {
-		if (value[field] !== null && !isIsoDate(value[field]) && !isIsoDateTimeWithOffset(value[field])) {
+	for (const field of ['scheduledDate', 'startDate', 'dueDate', 'endDate'] as const) {
+		if (value[field] !== null && value[field] !== undefined && !isIsoDate(value[field]) && !isIsoDateTimeWithOffset(value[field])) {
 			issues.push(issue('invalid-date', field, `${field} 必须是有效日期或带时区的日期时间。`));
 		}
 	}

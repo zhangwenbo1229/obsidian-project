@@ -1,9 +1,11 @@
+import { setIcon } from 'obsidian';
 import type { CalendarDashboardModuleConfig } from '../../domain/types';
 import { localDate } from '../../utils/dates';
 import { buildCalendarMonth, getChineseCalendarMetadata } from './calendar-model';
 import { createHeadingButton, createModuleBody } from './card-ui';
 import type { DashboardModuleDefinition, DashboardModuleRenderContext } from './types';
 import { renderCalendarSettings } from './module-settings';
+import { checkInHistoryFor } from './check-in-model';
 
 const cursors = new Map<string, { year: number; month: number }>();
 
@@ -35,6 +37,8 @@ function renderMonth(body: HTMLElement, subtitle: HTMLElement, context: Dashboar
 	const monthMetadata = getChineseCalendarMetadata(new Date(model.year, model.month, 15));
 	subtitle.setText(`${model.year} 年 ${model.month + 1} 月 · ${monthMetadata.ganzhiYear}`);
 	const grid = body.createDiv({ cls: 'op-module-calendar-grid' });
+	grid.style.setProperty('--op-calendar-check-in-color', config.checkInColor);
+	const checkInHistory = checkInHistoryFor(context.manager.personalDashboardSettings.checkInHistories, config.checkInCardId);
 	for (const weekday of model.weekdays) grid.createDiv({ cls: 'op-module-calendar-weekday', text: weekday });
 	for (const cell of model.cells) {
 		const day = grid.createDiv({
@@ -47,6 +51,16 @@ function renderMonth(body: HTMLElement, subtitle: HTMLElement, context: Dashboar
 		day.createSpan({ cls: 'op-module-calendar-day-number', text: String(cell.day) });
 		const annotation = cell.annotation ?? cell.lunarLabel;
 		if (annotation) day.createSpan({ cls: `op-module-calendar-annotation${cell.annotation ? ' is-holiday' : ''}`, text: annotation });
+		if (config.useCheckInData) {
+			const count = checkInHistory[cell.isoDate]?.length ?? 0;
+			if (count > 0) {
+				const marker = day.createSpan({ cls: 'op-module-calendar-check-in' });
+				const icon = marker.createSpan({ cls: 'op-module-calendar-check-in-icon' });
+				if (/^[a-z0-9][a-z0-9-]*$/iu.test(config.checkInIcon)) setIcon(icon, config.checkInIcon);
+				else icon.setText(config.checkInIcon);
+				marker.createSpan({ text: String(count) });
+			}
+		}
 	}
 }
 

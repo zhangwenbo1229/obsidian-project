@@ -4,11 +4,13 @@ import { createHeadingButton, createModuleBody, renderModuleMessage } from './ca
 import { renderWeatherSettings } from './module-settings';
 import type { DashboardModuleDefinition, DashboardModuleRenderContext } from './types';
 import { WeatherService, type WeatherSnapshot } from './weather-service';
+import { DashboardRequestPolicy } from './request-policy';
 
-const weatherService = new WeatherService(async (url) => {
+const weatherRequests = new DashboardRequestPolicy(async (url) => {
 	const response = await requestUrl({ url });
 	return response.json as unknown;
 });
+const weatherService = new WeatherService((url) => weatherRequests.request(url));
 
 function roundedTemperature(value: number): string {
 	return `${Math.round(value)}°`;

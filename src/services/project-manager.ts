@@ -8,6 +8,9 @@ import type {
 	TaskConfigurationTemplate,
 	PersonalDashboardCardLayout,
 	TaskDocument,
+	EmbeddedSubtask,
+	Person,
+	PersonMetadataFieldDefinition,
 } from '../domain/types';
 import { validateGlobalConfig, validateProjectConfig, validateTaskMetadata, validateTaskReferences } from '../domain/validation';
 import { collectTaskTree } from '../domain/relations';
@@ -47,6 +50,15 @@ import { normalizeProjectViewDisplay, type ProjectViewDisplaySettings } from '..
 import { removeTagGroupAssignments, renameTagGroupAssignments, rootTagPath } from './tag-group-service';
 import { normalizePersonalDashboardSettings, type PersonalDashboardSettings } from '../views/personal-dashboard-settings';
 import { mapConcurrent } from '../utils/async-pool';
+import { createEmbeddedSubtask as prepareEmbeddedSubtask, type EmbeddedSubtaskInput, updateEmbeddedSubtask as patchEmbeddedSubtask } from './embedded-subtask-service';
+import { parseEmbeddedSubtasks, removeEmbeddedSubtask, upsertEmbeddedSubtask } from '../markdown/embedded-subtask-parser';
+import { normalizeTaskMetadataSettings, type TaskMetadataSettings } from '../settings/task-metadata-settings';
+import { collectPeopleFromMetadata, normalizePeopleSourceSettings, reconcileSourcedPeople, type PeopleSourceSettings } from './people-source';
+import { normalizeNativeSidebarSettings, type NativeSidebarSettings, type PropertyGroupPresentation, type PropertyPresentation } from '../settings/native-sidebar-settings';
+import { normalizePersonMetadataFields, normalizePersonMetadataValue, normalizePersonNamePresentation } from './person-metadata';
+import type { PersonNamePresentation } from '../domain/types';
+import { DEFAULT_PERSON_DIRECTORY, personMarkdownPath, serializePersonMarkdown } from '../markdown/person-parser';
+import { personDeletionBlockReason } from './person-deletion';
 
 export const DEFAULT_GLOBAL_CONFIG_PATH = '项目管理/全局配置.md';
 
@@ -63,6 +75,9 @@ export class ProjectManager {
 	personalDashboardLayout: PersonalDashboardCardLayout[] = [];
 	personalDashboardSettings: PersonalDashboardSettings = normalizePersonalDashboardSettings();
 	projectViewDisplay: ProjectViewDisplaySettings = normalizeProjectViewDisplay();
+	taskMetadataSettings: TaskMetadataSettings = normalizeTaskMetadataSettings();
+	peopleSourceSettings: PeopleSourceSettings = normalizePeopleSourceSettings();
+	nativeSidebarSettings: NativeSidebarSettings = normalizeNativeSidebarSettings();
 	dataIssues: PathIssue[] = [];
 	pendingMigrations: MigrationJournalState[] = [];
 	private readonly vault: ObsidianVaultAdapter;
@@ -73,6 +88,8 @@ export class ProjectManager {
 	private baseDataIssues: PathIssue[] = [];
 	private taskIssuesByPath = new Map<string, PathIssue[]>();
 	private dashboardFileOpenSave: Promise<void> = Promise.resolve();
+	private taskIndexInitialization: Promise<void> | null = null;
+	private taskIndexReady = false;
 
 	constructor(
 		readonly app: App,
@@ -84,12 +101,25 @@ export class ProjectManager {
 	}
 
 	async initialize(): Promise<void> {
+		await this.initializeConfiguration();
+		await this.initializeTaskIndex();
+	}
+
+	async initializeConfiguration(): Promise<void> {
 		const snapshot = await loadOrMigrateConfiguration(
 			this.configStore,
 			() => this.loadLegacyConfiguration(),
 		);
 		this.applyConfiguration(snapshot);
-		await this.rebuildTaskIndex();
+	}
+
+	initializeTaskIndex(): Promise<void> {
+		if (this.taskIndexInitialization) return this.taskIndexInitialization;
+		if (this.taskIndexReady) return Promise.resolve();
+		this.taskIndexInitialization ??= this.rebuildTaskIndex().finally(() => {
+			this.taskIndexInitialization = null;
+		});
+		return this.taskIndexInitialization;
 	}
 
 	async reload(): Promise<void> {
@@ -103,7 +133,7 @@ export class ProjectManager {
 
 	private async rebuildTaskIndex(): Promise<void> {
 		const customKeys = new Set(this.projects.flatMap((project) => project.customFields.map((field) => field.key)));
-		const sources = await this.taskRepository.listSources();
+		const sources = await this.taskRepository.listSources(this.projects.map((project) => project.taskDirectory));
 		const parsed = await mapConcurrent(sources, 8, ({ path, source }) => this.parseIndexedTask(path, customKeys, source));
 		const tasks = parsed.filter((task): task is IndexedTask => task !== null);
 		this.index.replace(tasks);
@@ -118,6 +148,7 @@ export class ProjectManager {
 		this.protectedByPath = new Map(tasks.map((task) => [task.path, { uid: task.document.metadata.uid, key: task.document.metadata.key }]));
 		this.rebuildDataIssues();
 		this.pendingMigrations = await MigrationJournal.listIncomplete(this.vault);
+		this.taskIndexReady = true;
 		for (const listener of this.listeners) listener();
 	}
 
@@ -257,11 +288,18 @@ export class ProjectManager {
 		this.savedProjectFilters = structuredClone(normalized.savedProjectFilters);
 		this.personalDashboardLayout = normalizeDashboardLayout(normalized.personalDashboardLayout, customFields);
 		this.personalDashboardSettings = normalizePersonalDashboardSettings(normalized.personalDashboardSettings);
-		this.projectViewDisplay = normalizeProjectViewDisplay(normalized.projectViewDisplay, customFields);
+		this.projectViewDisplay = normalizeProjectViewDisplay(normalized.projectViewDisplay, customFields, this.configurationWorkflowStatuses());
+		this.taskMetadataSettings = normalizeTaskMetadataSettings(normalized.taskMetadataSettings);
+		this.peopleSourceSettings = normalizePeopleSourceSettings(normalized.peopleSourceSettings);
+		this.nativeSidebarSettings = normalizeNativeSidebarSettings(normalized.nativeSidebarSettings);
 	}
 
 	private configurationCustomFields(projects = this.projects) {
 		return [...new Map(projects.flatMap((project) => project.customFields).map((field) => [field.key, field])).values()];
+	}
+
+	private configurationWorkflowStatuses(projects = this.projects) {
+		return [...new Map(projects.flatMap((project) => project.workflow.statuses).map((status) => [status.id, status])).values()];
 	}
 
 	private snapshot(): ConfigurationSnapshot {
@@ -276,8 +314,88 @@ export class ProjectManager {
 			savedProjectFilters: structuredClone(this.savedProjectFilters),
 			personalDashboardLayout: structuredClone(this.personalDashboardLayout),
 			personalDashboardSettings: normalizePersonalDashboardSettings(this.personalDashboardSettings),
-			projectViewDisplay: normalizeProjectViewDisplay(this.projectViewDisplay, this.configurationCustomFields()),
+			projectViewDisplay: normalizeProjectViewDisplay(this.projectViewDisplay, this.configurationCustomFields(), this.configurationWorkflowStatuses()),
+			taskMetadataSettings: normalizeTaskMetadataSettings(this.taskMetadataSettings),
+			peopleSourceSettings: normalizePeopleSourceSettings(this.peopleSourceSettings),
+			nativeSidebarSettings: normalizeNativeSidebarSettings(this.nativeSidebarSettings),
 		};
+	}
+
+	async saveTaskMetadataSettings(settings: TaskMetadataSettings): Promise<void> {
+		this.taskMetadataSettings = normalizeTaskMetadataSettings(settings);
+		await this.persistConfiguration();
+		for (const listener of this.listeners) listener();
+	}
+
+	async savePeopleSourceSettings(settings: PeopleSourceSettings): Promise<void> {
+		this.peopleSourceSettings = normalizePeopleSourceSettings(settings);
+		await this.refreshPeopleFromMetadata();
+	}
+
+	async refreshPeopleFromMetadata(preferred?: Person): Promise<void> {
+		let sourced = collectPeopleFromMetadata(this.app.vault.getMarkdownFiles().map((file) => ({
+			path: file.path,
+			basename: file.basename,
+			frontmatter: this.app.metadataCache.getFileCache(file)?.frontmatter,
+		})), this.peopleSourceSettings, this.globalConfig.personMetadataFields);
+		if (preferred?.sourcePath) {
+			sourced = [...sourced.filter((person) => person.sourcePath !== preferred.sourcePath), preferred];
+		}
+		this.globalConfig.people = reconcileSourcedPeople(
+			this.globalConfig.people,
+			sourced,
+			this.globalConfig.currentUserId,
+		);
+		await this.persistConfiguration();
+		for (const listener of this.listeners) listener();
+	}
+
+	async saveNativeSidebarSettings(settings: NativeSidebarSettings): Promise<void> {
+		this.nativeSidebarSettings = normalizeNativeSidebarSettings(settings);
+		await this.persistConfiguration();
+		for (const listener of this.listeners) listener();
+	}
+
+	async savePropertyGroup(group: PropertyGroupPresentation): Promise<void> {
+		const groups = this.nativeSidebarSettings.propertyGroups.filter((item) => item.id !== group.id);
+		groups.push(group);
+		await this.saveNativeSidebarSettings({ ...this.nativeSidebarSettings, propertyGroups: groups });
+	}
+
+	async deletePropertyGroup(groupId: string): Promise<void> {
+		const propertyStyles = Object.fromEntries(Object.entries(this.nativeSidebarSettings.propertyStyles).map(([key, style]) => [key, style.groupId === groupId ? { ...style, groupId: undefined } : style]));
+		await this.saveNativeSidebarSettings({ ...this.nativeSidebarSettings, propertyGroups: this.nativeSidebarSettings.propertyGroups.filter((group) => group.id !== groupId), propertyStyles });
+	}
+
+	async savePropertyStyle(key: string, style: PropertyPresentation): Promise<void> {
+		await this.saveNativeSidebarSettings({ ...this.nativeSidebarSettings, propertyStyles: { ...this.nativeSidebarSettings.propertyStyles, [key]: style } });
+	}
+
+	configurationSnapshot(): ConfigurationSnapshot {
+		return structuredClone(this.snapshot());
+	}
+
+	async replaceConfiguration(snapshot: ConfigurationSnapshot): Promise<void> {
+		const previous = this.snapshot();
+		const normalized = normalizeConfigurationSnapshot(snapshot);
+		const globalValidation = validateGlobalConfig(normalized.globalConfig);
+		const projectIssues = normalized.projects.flatMap((project) => validateProjectConfig(project).issues);
+		const issues = [...globalValidation.issues, ...projectIssues];
+		if (issues.length > 0) throw new Error(issues.map((issue) => issue.message).join('\n'));
+		try {
+			await this.configStore.save(normalized);
+			const verified = await this.configStore.load();
+			if (!verified || JSON.stringify(normalizeConfigurationSnapshot(verified)) !== JSON.stringify(normalized)) {
+				throw new Error('导入配置写入后验证失败。');
+			}
+			this.applyConfiguration(normalized);
+			await this.rebuildTaskIndex();
+		} catch (error) {
+			await this.configStore.save(previous);
+			this.applyConfiguration(previous);
+			await this.rebuildTaskIndex();
+			throw error;
+		}
 	}
 
 	private async persistConfiguration(): Promise<void> {
@@ -386,7 +504,7 @@ export class ProjectManager {
 	}
 
 	async saveProjectViewDisplay(settings: ProjectViewDisplaySettings): Promise<void> {
-		this.projectViewDisplay = normalizeProjectViewDisplay(settings, this.configurationCustomFields());
+		this.projectViewDisplay = normalizeProjectViewDisplay(settings, this.configurationCustomFields(), this.configurationWorkflowStatuses());
 		await this.persistConfiguration();
 		for (const listener of this.listeners) listener();
 	}
@@ -684,6 +802,120 @@ export class ProjectManager {
 		await this.reload();
 	}
 
+	async savePerson(person: Person): Promise<void> {
+		const name = person.name.trim();
+		if (!name) throw new Error('人员姓名不能为空。');
+		const metadata = Object.fromEntries(this.globalConfig.personMetadataFields.flatMap((field) => {
+			const value = normalizePersonMetadataValue(field, person.metadata?.[field.key]);
+			return value === undefined ? [] : [[field.key, value]];
+		}));
+		const folder = this.peopleSourceSettings.folder || DEFAULT_PERSON_DIRECTORY;
+		let sourcePath = person.sourcePath ?? personMarkdownPath(folder, name);
+		if (!person.sourcePath && await this.vault.exists(sourcePath)) {
+			sourcePath = personMarkdownPath(folder, `${name} ${person.id.slice(0, 8)}`);
+		}
+		const next = { ...structuredClone(person), name, metadata, sourcePath };
+		await this.vault.ensureFolder(sourcePath.split('/').slice(0, -1).join('/'));
+		if (await this.vault.exists(sourcePath)) {
+			await this.vault.process(sourcePath, (source) => serializePersonMarkdown(
+				next, this.peopleSourceSettings, this.globalConfig.personMetadataFields, source,
+			));
+		} else {
+			await this.vault.create(sourcePath, serializePersonMarkdown(
+				next, this.peopleSourceSettings, this.globalConfig.personMetadataFields,
+			));
+		}
+		if (!(await this.vault.exists(sourcePath))) throw new Error(`人员文件写入失败：${sourcePath}`);
+		const index = this.globalConfig.people.findIndex((item) => item.id === next.id);
+		if (index < 0) this.globalConfig.people.push(next);
+		else this.globalConfig.people[index] = next;
+		if (this.peopleSourceSettings.enabled) await this.refreshPeopleFromMetadata(next);
+		else {
+			await this.persistConfiguration();
+			for (const listener of this.listeners) listener();
+		}
+	}
+
+	async deletePerson(personId: string): Promise<void> {
+		const person = this.globalConfig.people.find((item) => item.id === personId);
+		if (!person) throw new Error('人员不存在或已被删除。');
+		const blockReason = personDeletionBlockReason(
+			personId,
+			this.globalConfig.currentUserId,
+			this.index.validTasks().map((task) => task.document),
+		);
+		if (blockReason) throw new Error(blockReason);
+		if (person.sourcePath && await this.vault.exists(person.sourcePath)) {
+			await this.vault.trash(person.sourcePath);
+		}
+		this.globalConfig.people = this.globalConfig.people.filter((item) => item.id !== personId);
+		await this.persistConfiguration();
+		for (const listener of this.listeners) listener();
+	}
+
+	async savePersonNamePresentation(presentation: PersonNamePresentation): Promise<void> {
+		this.globalConfig.personNamePresentation = normalizePersonNamePresentation(presentation);
+		await this.persistConfiguration();
+		for (const listener of this.listeners) listener();
+	}
+
+	async savePersonMetadataFields(fields: readonly PersonMetadataFieldDefinition[]): Promise<void> {
+		const normalized = normalizePersonMetadataFields(fields);
+		const previousById = new Map(this.globalConfig.personMetadataFields.map((field) => [field.id, field]));
+		for (const field of normalized) {
+			const previous = previousById.get(field.id);
+			if (!previous || previous.key === field.key) continue;
+			for (const person of this.globalConfig.people) {
+				if (!person.metadata || person.metadata[previous.key] === undefined || person.metadata[field.key] !== undefined) continue;
+				person.metadata[field.key] = person.metadata[previous.key];
+				delete person.metadata[previous.key];
+			}
+		}
+		this.globalConfig.personMetadataFields = normalized;
+		await this.persistConfiguration();
+		for (const listener of this.listeners) listener();
+	}
+
+	async addDashboardCheckIn(cardId: string, date: string, timestamp = new Date().toISOString()): Promise<void> {
+		const history = this.personalDashboardSettings.checkInHistories[cardId] ?? {};
+		const current = history[date] ?? [];
+		this.personalDashboardSettings.checkInHistories[cardId] = { ...history, [date]: [...current, timestamp] };
+		await this.savePersonalDashboardSettings(this.personalDashboardSettings);
+	}
+
+	embeddedSubtasks(entry: IndexedTask): EmbeddedSubtask[] {
+		return parseEmbeddedSubtasks(entry.document.subtasks ?? '').subtasks;
+	}
+
+	async createEmbeddedSubtask(entry: IndexedTask, input: EmbeddedSubtaskInput): Promise<EmbeddedSubtask> {
+		const subtask = prepareEmbeddedSubtask(input);
+		const document = structuredClone(entry.document);
+		document.subtasks = upsertEmbeddedSubtask(document.subtasks ?? '', subtask);
+		await this.saveTask(entry, document);
+		return subtask;
+	}
+
+	async updateEmbeddedSubtask(entry: IndexedTask, subtask: EmbeddedSubtask): Promise<void> {
+		const current = this.embeddedSubtasks(entry).find((item) => item.id === subtask.id);
+		if (!current) throw new Error('子任务不存在或已被删除。');
+		const next = patchEmbeddedSubtask(current, subtask);
+		const document = structuredClone(entry.document);
+		document.subtasks = upsertEmbeddedSubtask(document.subtasks ?? '', next);
+		await this.saveTask(entry, document);
+	}
+
+	async toggleEmbeddedSubtask(entry: IndexedTask, subtaskId: string, completed: boolean): Promise<void> {
+		const current = this.embeddedSubtasks(entry).find((item) => item.id === subtaskId);
+		if (!current) throw new Error('子任务不存在或已被删除。');
+		await this.updateEmbeddedSubtask(entry, { ...current, completed });
+	}
+
+	async deleteEmbeddedSubtask(entry: IndexedTask, subtaskId: string): Promise<void> {
+		const document = structuredClone(entry.document);
+		document.subtasks = removeEmbeddedSubtask(document.subtasks ?? '', subtaskId);
+		await this.saveTask(entry, document);
+	}
+
 	async renameTag(oldPath: string, newPath: string): Promise<void> {
 		const entries = this.index.validTasks().filter((task) =>
 			task.document.metadata.tags.some((tag) => tag === oldPath || tag.startsWith(`${oldPath}/`)),
@@ -907,6 +1139,7 @@ function defaultConfiguration(): ConfigurationSnapshot {
 			defaultTaskDirectory: '项目管理/任务',
 			currentUserId: userId,
 			people: [{ id: userId, name: '默认用户', active: true }],
+			personMetadataFields: [],
 		},
 		projects: [],
 		tagOrder: [],

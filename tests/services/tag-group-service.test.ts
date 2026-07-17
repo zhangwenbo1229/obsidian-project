@@ -2,6 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { groupTags, removeTagGroupAssignments, renameTagGroupAssignments } from '../../src/services/tag-group-service';
 
 describe('tag groups', () => {
+	it('keeps an explicit ungrouped section when no custom groups exist', () => {
+		expect(groupTags(['alpha', 'beta'], [], {})).toEqual([
+			{ groupId: null, name: '未分组', tags: ['alpha', 'beta'] },
+		]);
+	});
 	it('groups root and nested tags without changing their stored paths', () => {
 		expect(groupTags(
 			['frontend', 'test/calendar', 'urgent'],

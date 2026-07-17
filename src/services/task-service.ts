@@ -1,8 +1,8 @@
 import type {
 	GlobalConfig,
 	ProjectConfig,
+	ProjectPriority,
 	TaskDocument,
-	TaskPriority,
 	TaskRelation,
 	TaskTypeDefinition,
 } from '../domain/types';
@@ -15,11 +15,13 @@ export interface NewTaskInput {
 	globalConfig: GlobalConfig;
 	title: string;
 	taskTypeId: string;
-	priority?: TaskPriority;
+	priority?: ProjectPriority;
 	reporterId?: string;
 	assigneeId: string | null;
+	scheduledDate?: string | null;
 	startDate: string | null;
 	dueDate: string | null;
+	endDate?: string | null;
 	tags: string[];
 	custom: Record<string, unknown>;
 	body: string;
@@ -141,8 +143,10 @@ export function prepareNewTask(
 				taskTypeId: input.taskTypeId,
 				priority: input.priority ?? 'medium',
 				createdAt: localDateTime(now),
+				scheduledDate: input.scheduledDate ?? null,
 				startDate: input.startDate,
 				dueDate: input.dueDate,
+				endDate: input.endDate ?? null,
 				completedAt: null,
 				terminatedAt: null,
 				reporterId: input.reporterId ?? input.globalConfig.currentUserId,

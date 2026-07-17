@@ -94,6 +94,36 @@ describe('task markdown parser', () => {
 		expect(result.document?.metadata.priority).toBe('medium');
 	});
 
+	it('migrates the legacy due date to the plan date when four-date keys are absent', () => {
+		const result = parse(source);
+		expect(result.document?.metadata).toMatchObject({
+			scheduledDate: '2026-07-20',
+			dueDate: null,
+			startDate: '2026-07-13',
+			endDate: null,
+		});
+	});
+
+	it('round-trips the explicit four-date project model', () => {
+		const modern = source
+			.replace('start-date: 2026-07-13\ndue-date: 2026-07-20', [
+				'scheduled-date: 2026-07-16T09:00:00+08:00',
+				'due-date: 2026-07-20T18:00:00+08:00',
+				'start-date: 2026-07-15T10:00:00+08:00',
+				'end-date: 2026-07-22T17:00:00+08:00',
+			].join('\n'));
+		const parsed = parse(modern);
+		expect(parsed.document?.metadata).toMatchObject({
+			scheduledDate: '2026-07-16T09:00:00+08:00', dueDate: '2026-07-20T18:00:00+08:00',
+			startDate: '2026-07-15T10:00:00+08:00', endDate: '2026-07-22T17:00:00+08:00',
+		});
+		const serialized = serializeTaskMarkdown(parsed.document!);
+		expect(serialized).toContain('scheduled-date: 2026-07-16T09:00:00+08:00');
+		expect(serialized).toContain('due-date: 2026-07-20T18:00:00+08:00');
+		expect(serialized).toContain('start-date: 2026-07-15T10:00:00+08:00');
+		expect(serialized).toContain('end-date: 2026-07-22T17:00:00+08:00');
+	});
+
 	it('derives built-in priority from an existing legacy priority custom value', () => {
 		const legacy = source.replace('task-priority: high', 'priority: low');
 		const result = parseTaskMarkdown(legacy, { customFieldKeys: new Set(['severity', 'priority']) });
@@ -117,6 +147,18 @@ describe('task markdown parser', () => {
 		);
 	});
 
+	it('writes project/task headings while continuing to read legacy headings', () => {
+		const legacy = parse(source).document!;
+		const serialized = serializeTaskMarkdown(legacy);
+		expect(serialized).toContain('## 项目描述');
+		expect(serialized).toContain('## 任务');
+		expect(serialized).not.toContain('## 任务正文');
+		expect(serialized).not.toContain('## 子任务');
+		const reparsed = parse(serialized);
+		expect(reparsed.document?.body).toBe(legacy.body);
+		expect(reparsed.document?.subtasks).toBe(legacy.subtasks);
+	});
+
 	it('keeps legacy tasks without a subtask section valid', () => {
 		const legacy = source.replace(/\n## 子任务\n[\s\S]*?(?=\n## 备注)/u, '');
 		const result = parse(legacy);
@@ -129,7 +171,7 @@ describe('task markdown parser', () => {
 
 		const serialized = serializeTaskMarkdown(parsed.document!);
 
-		expect(serialized).toContain('\r\n## 任务正文\r\n');
+		expect(serialized).toContain('\r\n## 项目描述\r\n');
 		expect(serialized.replaceAll('\r\n', '')).not.toContain('\n');
 	});
 

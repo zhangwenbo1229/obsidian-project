@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 const settings = readFileSync(new URL('../../src/settings/settings-tab.ts', import.meta.url), 'utf8');
 const templateEditor = readFileSync(new URL('../../src/settings/template-editor.ts', import.meta.url), 'utf8');
+const fieldEditor = readFileSync(new URL('../../src/settings/template-field-editor.ts', import.meta.url), 'utf8');
 const workflowEditor = readFileSync(new URL('../../src/settings/workflow-editor.ts', import.meta.url), 'utf8');
 const projectEditor = readFileSync(new URL('../../src/modals/project-config-modal.ts', import.meta.url), 'utf8');
 const css = readFileSync(new URL('../../styles.css', import.meta.url), 'utf8');
@@ -16,11 +17,11 @@ describe('template configuration UI', () => {
 		expect(workflowEditor).toContain('op-workflow-canvas');
 		expect(projectEditor).toContain('templateId');
 		expect(css).toContain('.op-workflow-node');
-		expect(templateEditor).toContain("setName('任务标识')");
-		expect(templateEditor).toContain("setName('任务标题颜色')");
+		expect(templateEditor).toContain("setName('项目标识')");
+		expect(templateEditor).toContain("setName('项目标题颜色')");
 		expect(templateEditor).toContain('TaskMarkerPickerModal');
-		expect(templateEditor).toContain('CUSTOM_FIELD_TYPE_LABELS');
-		expect(templateEditor).toContain("'multiline-text': '多行文本'");
+		expect(fieldEditor).toContain('CUSTOM_FIELD_TYPE_LABELS');
+		expect(fieldEditor).toContain("'multiline-text': '多行文本'");
 		expect(workflowEditor).toContain('op-workflow-stage');
 		expect(workflowEditor).toContain("addEventListener('pointerdown'");
 		expect(workflowEditor).toContain('connectWorkflowStatuses');

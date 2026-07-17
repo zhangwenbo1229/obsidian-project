@@ -66,17 +66,21 @@ async function seedDemoProject() {
 		if (file) await app.fileManager.trashFile(file);
 	}
 	await manager.reload();
-	const people = [
-		{ id: '11111111-1111-4111-8111-111111111111', name: '产品负责人' },
-		{ id: '22222222-2222-4222-8222-222222222222', name: '开发同学' },
+	const personMetadataFields = [
+		{ id: 'demo-person-role', key: 'role', title: '岗位', type: 'text', active: true, icon: 'badge', color: '#0c66e4' },
+		{ id: 'demo-person-department', key: 'department', title: '部门', type: 'single-select', active: true, icon: 'building-2', color: '#6554c0', options: [{ id: 'product', name: '产品' }, { id: 'engineering', name: '研发' }, { id: 'design', name: '设计' }] },
+		{ id: 'demo-person-capacity', key: 'capacity', title: '本周容量', type: 'number', active: true, icon: 'gauge', color: '#b65c02' },
+		{ id: 'demo-person-remote', key: 'remote', title: '远程办公', type: 'boolean', active: true, icon: 'house-wifi', color: '#1f845a' },
+		{ id: 'demo-person-joined', key: 'joined', title: '加入日期', type: 'date', active: true, icon: 'calendar-plus', color: '#227d9b' },
+		{ id: 'demo-person-skills', key: 'skills', title: '技能', type: 'multi-select', active: true, icon: 'sparkles', color: '#ae4787', options: [{ id: 'planning', name: '规划' }, { id: 'typescript', name: 'TypeScript' }, { id: 'ux', name: 'UX' }, { id: 'research', name: '调研' }] },
 	];
-	let peopleChanged = false;
-	for (const person of people) {
-		if (manager.globalConfig.people.some((item) => item.id === person.id)) continue;
-		manager.globalConfig.people.push({ ...person, active: true });
-		peopleChanged = true;
-	}
-	if (peopleChanged) await manager.saveGlobalConfig();
+	await manager.savePersonMetadataFields(personMetadataFields);
+	const people = [
+		{ id: '11111111-1111-4111-8111-111111111111', name: '产品负责人', active: true, metadata: { role: '高级产品经理', department: 'product', capacity: 70, remote: false, joined: '2024-03-18', skills: ['planning', 'research'] } },
+		{ id: '22222222-2222-4222-8222-222222222222', name: '开发负责人', active: true, metadata: { role: '技术负责人', department: 'engineering', capacity: 85, remote: true, joined: '2023-11-06', skills: ['typescript', 'planning'] } },
+		{ id: '33333333-3333-4333-8333-333333333333', name: '设计负责人', active: true, metadata: { role: '产品设计师', department: 'design', capacity: 60, remote: true, joined: '2025-02-10', skills: ['ux', 'research'] } },
+	];
+	for (const person of people) await manager.savePerson(person);
 
 	const existingDemoTasks = manager.index.validTasks().filter((task) =>
 		task.project.code === 'PLAY' && task.document.metadata.tags.includes('demo-data'),
@@ -170,8 +174,13 @@ async function seedDemoProject() {
 		['日历跨月显示异常', 'bug', 'waiting', null, '2026-07-05', people[1].id, ['calendar', 'urgent'], { priority: 'high', 'story-points': 2, 'high-risk': false, 'target-release': '1.0.1' }],
 		['准备移动端回归清单', 'task', 'doing', '2026-07-12', '2026-07-14', people[1].id, ['mobile', 'qa'], { priority: 'medium', 'story-points': 3, 'high-risk': false, 'target-release': '1.0.1' }],
 		['规划下一版本路线图', 'requirement', 'waiting', null, '2026-07-31', people[0].id, ['roadmap', 'planning'], { priority: 'low', 'story-points': 5, 'high-risk': false, 'target-release': '1.2.0', 'review-at': '2026-07-25T09:30:00+08:00' }],
-	].map(([title, taskTypeId, statusId, startDate, dueDate, assigneeId, tags, custom]) => ({
-		title, taskTypeId, statusId, startDate, dueDate, assigneeId, tags, custom,
+	].map(([title, taskTypeId, statusId, startDate, dueDate, assigneeId, tags, custom], index) => ({
+		title, taskTypeId, statusId,
+		scheduledDate: index % 3 === 0 ? startDate : null,
+		startDate: index % 3 === 0 ? null : startDate,
+		dueDate: index % 3 === 0 ? dueDate : null,
+		endDate: index % 3 === 1 ? dueDate : null,
+		assigneeId, tags, custom,
 	}));
 
 	for (const definition of definitions) {
@@ -185,8 +194,10 @@ async function seedDemoProject() {
 			title: definition.title,
 			taskTypeId: definition.taskTypeId,
 			assigneeId: definition.assigneeId,
+			scheduledDate: definition.scheduledDate,
 			startDate: definition.startDate,
 			dueDate: definition.dueDate,
+			endDate: definition.endDate,
 			tags: [...definition.tags, 'demo-data'],
 			custom: definition.custom,
 			body: '',
@@ -201,8 +212,10 @@ async function seedDemoProject() {
 		);
 		const document = structuredClone(entry.document);
 		document.metadata.statusId = definition.statusId;
+		document.metadata.scheduledDate = definition.scheduledDate;
 		document.metadata.startDate = definition.startDate;
 		document.metadata.dueDate = definition.dueDate;
+		document.metadata.endDate = definition.endDate;
 		document.metadata.completedAt = definition.statusId === 'completed' ? '2026-07-09T17:30:00+08:00' : null;
 		document.metadata.terminatedAt = definition.statusId === 'cancelled' ? '2026-07-11T11:00:00+08:00' : null;
 		document.body = `${definition.title}\n\n演示场景 ${index + 1}：覆盖类型、状态、筛选和日历展示。`;
@@ -210,6 +223,13 @@ async function seedDemoProject() {
 			'- [[项目管理/演示说明]]',
 			`- [场景 ${index + 1} 参考资料](https://example.com/demo/${index + 1})`,
 		];
+		if (index === 0) {
+			document.subtasks = [
+				'- [ ] 发布前回归 #demo 🔼 ⏳ 2026-07-15 📅 2026-07-18 🆔 demo-publish-1',
+				'- [x] 完成需求评审 ✅ 2026-07-14 🆔 demo-review-1',
+				'- [ ] 普通 Markdown 任务',
+			].join('\n');
+		}
 		if ([1, 3, 7].includes(index) && document.notes.length === 0) {
 			document.notes.push({
 				id: crypto.randomUUID(),

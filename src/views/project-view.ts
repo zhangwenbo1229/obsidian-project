@@ -2,22 +2,21 @@ import { ItemView, Notice, setIcon, WorkspaceLeaf } from 'obsidian';
 import type { ProjectManager } from '../services/project-manager';
 import type { IndexedTask } from '../index/task-index';
 import { EditTaskModal } from '../modals/edit-task-modal';
-import { activeProjectFilterCount, ALL_PROJECTS_UID, calendarItems, classifyTaskQuadrants, filterProjectTasks, type ProjectFilters, type TaskQuadrant } from './selectors';
+import { activeProjectFilterCount, ALL_PROJECTS_UID, calendarItems, classifyTaskQuadrants, filterProjectTasks, priorityForQuadrantDrop, type ProjectFilters, type TaskQuadrant } from './selectors';
 import { transitionTask } from '../domain/workflow';
 import type { ProjectConfig, TaskDisplayField } from '../domain/types';
 import { displayDateTime, localDate, localDateTime } from '../utils/dates';
 import { PROJECT_FILTER_FIELD_DEFINITIONS, ProjectFilterFields, projectFilterFieldDefinition, type ProjectFilterField } from './project-filter-fields';
 import { restoreProjectFilter, serializeProjectFilter, validateSavedFilterName } from './saved-project-filters';
 import { createUuid } from '../utils/ids';
-import { resizeColumnWidth, totalColumnWidth } from './column-widths';
 import { toggleMultiValue } from './multi-select-filter';
-import { renderTaskMarker, renderTaskTitle } from './task-type-presentation';
-import { renderTaskCardFields, renderTaskMarkdownValue } from './task-card-fields';
-import { bindTaskCardActivation, isInteractiveTaskCardTarget } from './task-card-interaction';
-import { renderTags } from './tag-presentation';
-import { renderTaskRelations } from './task-relation-presentation';
+import { renderTaskTitle } from './task-type-presentation';
+import { renderTaskCardFields } from './task-card-fields';
+import { bindTaskCardActivation } from './task-card-interaction';
 import { formatCustomFieldValue } from './custom-field-presentation';
 import { calendarMonthCells, calendarRangeTitle, calendarWeekDates, moveCalendarCursor } from './calendar-range';
+import { renderProjectList } from './project-list-renderer';
+import { layoutCalendarSpans, type CalendarSpanLayout } from './calendar-span-layout';
 
 export const PROJECT_VIEW_TYPE = 'obsidian-project-project';
 type Mode = 'list' | 'board' | 'calendar' | 'quadrants';
@@ -33,10 +32,14 @@ export class ProjectView extends ItemView {
 	private tags = new Set<string>();
 	private dueDateFrom = '';
 	private dueDateTo = '';
+	private scheduledDateFrom = '';
+	private scheduledDateTo = '';
 	private createdAtFrom = '';
 	private createdAtTo = '';
 	private startDateFrom = '';
 	private startDateTo = '';
+	private endDateFrom = '';
+	private endDateTo = '';
 	private completedAtFrom = '';
 	private completedAtTo = '';
 	private statusCategories = new Set<string>();
@@ -44,7 +47,7 @@ export class ProjectView extends ItemView {
 	private hasIncompleteSubtasks = false;
 	private columnWidths: Record<string, number> = {
 		key: 110, title: 260, project: 130, type: 110, status: 110, priority: 90, reporter: 120,
-		assignee: 120, startDate: 150, dueDate: 150, tags: 180, relations: 220, links: 240, subtasks: 260,
+		assignee: 120, scheduledDate: 150, dueDate: 150, startDate: 150, endDate: 150, tags: 180, relations: 220, links: 240, subtasks: 260,
 	};
 	private sortColumn = 'key';
 	private sortAscending = true;
@@ -74,7 +77,7 @@ export class ProjectView extends ItemView {
 		const heroCopy = hero.createDiv();
 		heroCopy.createDiv({ cls: 'op-eyebrow', text: 'PROJECT SPACE / 项目空间' });
 		heroCopy.createEl('h2', { text: allProjects ? '全部项目' : project?.name ?? '选择项目' });
-		heroCopy.createEl('p', { text: allProjects ? `${this.manager.projects.length} 个项目 · ${scopedTasks.length} 个任务` : project ? `${project.code} · ${scopedTasks.length} 个任务` : '从项目开始组织工作。' });
+		heroCopy.createEl('p', { text: allProjects ? `${this.manager.projects.length} 个分组 · ${scopedTasks.length} 个项目` : project ? `${project.code} · ${scopedTasks.length} 个项目` : '选择分组开始组织项目。' });
 		const select = hero.createEl('select', { cls: 'op-project-picker' });
 		select.createEl('option', { value: ALL_PROJECTS_UID, text: '全部项目' });
 		for (const project of this.manager.projects) select.createEl('option', { value: project.uid, text: `${project.code} · ${project.name}` });
@@ -202,10 +205,14 @@ export class ProjectView extends ItemView {
 		this.tags = new Set(restored.tags);
 		this.createdAtFrom = restored.createdAtFrom ?? '';
 		this.createdAtTo = restored.createdAtTo ?? '';
+		this.scheduledDateFrom = restored.scheduledDateFrom ?? '';
+		this.scheduledDateTo = restored.scheduledDateTo ?? '';
 		this.startDateFrom = restored.startDateFrom ?? '';
 		this.startDateTo = restored.startDateTo ?? '';
 		this.dueDateFrom = restored.dueDateFrom ?? '';
 		this.dueDateTo = restored.dueDateTo ?? '';
+		this.endDateFrom = restored.endDateFrom ?? '';
+		this.endDateTo = restored.endDateTo ?? '';
 		this.completedAtFrom = restored.completedAtFrom ?? '';
 		this.completedAtTo = restored.completedAtTo ?? '';
 		this.hasIncompleteSubtasks = restored.hasIncompleteSubtasks ?? false;
@@ -221,8 +228,10 @@ export class ProjectView extends ItemView {
 		if (this.assigneeIds.size) active.push('assignee');
 		if (this.tags.size) active.push('tags');
 		if (this.createdAtFrom || this.createdAtTo) active.push('createdAt');
+		if (this.scheduledDateFrom || this.scheduledDateTo) active.push('scheduledDate');
 		if (this.startDateFrom || this.startDateTo) active.push('startDate');
 		if (this.dueDateFrom || this.dueDateTo) active.push('dueDate');
+		if (this.endDateFrom || this.endDateTo) active.push('endDate');
 		if (this.completedAtFrom || this.completedAtTo) active.push('completedAt');
 		if (this.hasIncompleteSubtasks) active.push('subtasks');
 		if (Object.keys(this.customFilters).length) active.push('customFields');
@@ -255,12 +264,16 @@ export class ProjectView extends ItemView {
 			reporterIds: this.reporterIds,
 			assigneeIds: this.assigneeIds,
 			tags: this.tags,
+			scheduledDateFrom: this.scheduledDateFrom || undefined,
+			scheduledDateTo: this.scheduledDateTo || undefined,
 			dueDateFrom: this.dueDateFrom || undefined,
 			dueDateTo: this.dueDateTo || undefined,
 			createdAtFrom: this.createdAtFrom || undefined,
 			createdAtTo: this.createdAtTo || undefined,
 			startDateFrom: this.startDateFrom || undefined,
 			startDateTo: this.startDateTo || undefined,
+			endDateFrom: this.endDateFrom || undefined,
+			endDateTo: this.endDateTo || undefined,
 			completedAtFrom: this.completedAtFrom || undefined,
 			completedAtTo: this.completedAtTo || undefined,
 			hasIncompleteSubtasks: this.hasIncompleteSubtasks || undefined,
@@ -271,8 +284,10 @@ export class ProjectView extends ItemView {
 		this.keyword = '';
 		for (const selected of [this.statusIds, this.statusCategories, this.taskTypeIds, this.reporterIds, this.assigneeIds, this.tags]) selected.clear();
 		this.createdAtFrom = ''; this.createdAtTo = '';
+		this.scheduledDateFrom = ''; this.scheduledDateTo = '';
 		this.startDateFrom = ''; this.startDateTo = '';
 		this.dueDateFrom = ''; this.dueDateTo = '';
+		this.endDateFrom = ''; this.endDateTo = '';
 		this.completedAtFrom = ''; this.completedAtTo = '';
 		this.hasIncompleteSubtasks = false;
 		this.customFilters = {};
@@ -285,8 +300,10 @@ export class ProjectView extends ItemView {
 		else if (field === 'assignee') this.assigneeIds.clear();
 		else if (field === 'tags') this.tags.clear();
 		else if (field === 'createdAt') { this.createdAtFrom = ''; this.createdAtTo = ''; }
+		else if (field === 'scheduledDate') { this.scheduledDateFrom = ''; this.scheduledDateTo = ''; }
 		else if (field === 'startDate') { this.startDateFrom = ''; this.startDateTo = ''; }
 		else if (field === 'dueDate') { this.dueDateFrom = ''; this.dueDateTo = ''; }
+		else if (field === 'endDate') { this.endDateFrom = ''; this.endDateTo = ''; }
 		else if (field === 'completedAt') { this.completedAtFrom = ''; this.completedAtTo = ''; }
 		else if (field === 'subtasks') this.hasIncompleteSubtasks = false;
 		else if (field === 'customFields') this.customFilters = {};
@@ -316,8 +333,10 @@ export class ProjectView extends ItemView {
 		if (this.hasIncompleteSubtasks) labels.push('子任务：包含未完成项');
 		for (const [label, from, to] of [
 			['创建日期', this.createdAtFrom, this.createdAtTo],
+			['计划日期', this.scheduledDateFrom, this.scheduledDateTo],
+			['截止日期', this.dueDateFrom, this.dueDateTo],
 			['开始日期', this.startDateFrom, this.startDateTo],
-			['计划完成', this.dueDateFrom, this.dueDateTo],
+			['结束日期', this.endDateFrom, this.endDateTo],
 			['完成日期', this.completedAtFrom, this.completedAtTo],
 		]) {
 			if (from || to) labels.push(`${label}：${from || '…'} → ${to || '…'}`);
@@ -387,8 +406,10 @@ export class ProjectView extends ItemView {
 		}
 		for (const range of [
 			{ field: 'createdAt', from: this.createdAtFrom, to: this.createdAtTo, setFrom: (value: string) => (this.createdAtFrom = value), setTo: (value: string) => (this.createdAtTo = value) },
-			{ field: 'startDate', from: this.startDateFrom, to: this.startDateTo, setFrom: (value: string) => (this.startDateFrom = value), setTo: (value: string) => (this.startDateTo = value) },
+			{ field: 'scheduledDate', from: this.scheduledDateFrom, to: this.scheduledDateTo, setFrom: (value: string) => (this.scheduledDateFrom = value), setTo: (value: string) => (this.scheduledDateTo = value) },
 			{ field: 'dueDate', from: this.dueDateFrom, to: this.dueDateTo, setFrom: (value: string) => (this.dueDateFrom = value), setTo: (value: string) => (this.dueDateTo = value) },
+			{ field: 'startDate', from: this.startDateFrom, to: this.startDateTo, setFrom: (value: string) => (this.startDateFrom = value), setTo: (value: string) => (this.startDateTo = value) },
+			{ field: 'endDate', from: this.endDateFrom, to: this.endDateTo, setFrom: (value: string) => (this.endDateFrom = value), setTo: (value: string) => (this.endDateTo = value) },
 			{ field: 'completedAt', from: this.completedAtFrom, to: this.completedAtTo, setFrom: (value: string) => (this.completedAtFrom = value), setTo: (value: string) => (this.completedAtTo = value) },
 		] satisfies Array<{ field: ProjectFilterField; from: string; to: string; setFrom(value: string): void; setTo(value: string): void }>) {
 			if (!this.filterFields.has(range.field)) continue;
@@ -432,7 +453,7 @@ export class ProjectView extends ItemView {
 		const tasks = filterProjectTasks(this.manager.index.validTasks(), this.currentFilters());
 		const results = content.createDiv({ cls: 'op-results-bar' });
 		results.createEl('strong', { text: `${tasks.length} 个任务` });
-		results.createSpan({ text: this.mode === 'board' ? '按工作流状态分组' : this.mode === 'calendar' ? '按开始与计划完成日期展示' : this.mode === 'quadrants' ? '高优先级为重要，3 天内到期为紧急' : '点击表头可临时排序' });
+		results.createSpan({ text: this.mode === 'board' ? '按工作流状态分组' : this.mode === 'calendar' ? '按开始日期与计划日期展示' : this.mode === 'quadrants' ? '高优先级为重要，3 天内到期为紧急' : '点击表头可临时排序' });
 		const surface = content.createDiv({ cls: 'op-mode-surface' });
 		if (this.mode === 'board') this.renderBoard(surface, tasks);
 		else if (this.mode === 'calendar') this.renderCalendar(surface, tasks);
@@ -442,7 +463,7 @@ export class ProjectView extends ItemView {
 
 	private renderQuadrants(parent: HTMLElement, tasks: ReturnType<typeof filterProjectTasks>): void {
 		const fields = this.displayFields('quadrants');
-		const quadrants = classifyTaskQuadrants(tasks, localDate());
+		const quadrants = classifyTaskQuadrants(tasks, localDate(), this.manager.projectViewDisplay.behavior.quadrants);
 		const grid = parent.createDiv({ cls: 'op-quadrant-grid' });
 		const definitions: Array<[TaskQuadrant, string, string]> = [
 			['importantUrgent', '重要且紧急', '立即处理'],
@@ -452,6 +473,21 @@ export class ProjectView extends ItemView {
 		];
 		for (const [key, title, description] of definitions) {
 			const region = grid.createDiv({ cls: `op-quadrant-region is-${key}` });
+			region.setAttribute('data-quadrant', key);
+			region.addEventListener('dragover', (event) => {
+				event.preventDefault();
+				region.addClass('is-drop-target');
+			});
+			region.addEventListener('dragleave', (event) => {
+				if (!region.contains(event.relatedTarget as Node | null)) region.removeClass('is-drop-target');
+			});
+			region.addEventListener('drop', (event) => {
+				event.preventDefault();
+				region.removeClass('is-drop-target');
+				const uid = event.dataTransfer?.getData('text/plain');
+				const task = uid ? this.manager.index.get(uid) : undefined;
+				if (task) void this.moveCardToQuadrant(task, key);
+			});
 			const heading = region.createDiv({ cls: 'op-quadrant-heading' });
 			const copy = heading.createDiv();
 			copy.createEl('h3', { text: title });
@@ -472,7 +508,32 @@ export class ProjectView extends ItemView {
 			renderTaskCardFields(card, task, this.manager, fields, {
 				titleClassName: 'op-quadrant-card-title', component: this, markerBeforeKey: true, priorityInCorner: true,
 			});
+			card.draggable = true;
+			card.addEventListener('dragstart', (event) => {
+				card.dataset.wasDragged = 'true';
+				event.dataTransfer?.setData('text/plain', task.document.metadata.uid);
+			});
+			card.addEventListener('dragend', () => window.setTimeout(() => delete card.dataset.wasDragged, 0));
+			card.addEventListener('click', (event) => {
+				if (card.dataset.wasDragged) event.stopImmediatePropagation();
+			});
 			bindTaskCardActivation(card, () => new EditTaskModal(this.manager, task).open());
+		}
+	}
+	private async moveCardToQuadrant(task: IndexedTask, quadrant: TaskQuadrant): Promise<void> {
+		const priority = priorityForQuadrantDrop(
+			task.document.metadata.priority,
+			quadrant,
+			this.manager.projectViewDisplay.behavior.quadrants.importantPriorities,
+		);
+		if (priority === task.document.metadata.priority) return;
+		try {
+			const document = structuredClone(task.document);
+			document.metadata.priority = priority;
+			await this.manager.saveTask(task, document);
+		} catch (error) {
+			new Notice(error instanceof Error ? error.message : String(error));
+			this.render();
 		}
 	}
 	private taskButton(parent: HTMLElement, task: IndexedTask): void {
@@ -482,93 +543,19 @@ export class ProjectView extends ItemView {
 		button.addEventListener('click', () => new EditTaskModal(this.manager, task).open());
 	}
 	private renderList(parent: HTMLElement, tasks: ReturnType<typeof filterProjectTasks>): void {
-		parent.addClass('op-list-scroll');
-		const viewport = parent.createDiv({ cls: 'op-list-scroll-viewport' });
-		const scrollbar = parent.createDiv({ cls: 'op-list-scrollbar', attr: { 'aria-label': '列表横向滚动条' } });
-		const scrollbarSpacer = scrollbar.createDiv({ cls: 'op-list-scrollbar-spacer' });
 		const fields = this.displayFields('list');
 		const columns = this.columnDefinitions(fields);
-		const sorted = [...tasks].sort((left, right) => {
-			const result = this.columnValue(left, this.sortColumn).localeCompare(this.columnValue(right, this.sortColumn), 'zh-CN');
-			return this.sortAscending ? result : -result;
+		renderProjectList({
+			parent, tasks, columns, columnWidths: this.columnWidths,
+			sortColumn: this.sortColumn, sortAscending: this.sortAscending,
+			manager: this.manager, component: this,
+			value: (task, column) => this.columnValue(task, column),
+			onSort: (column, ascending) => {
+				this.sortColumn = column;
+				this.sortAscending = ascending;
+				this.render();
+			},
 		});
-		const table = viewport.createEl('table', { cls: 'op-table' });
-		const updateTableWidth = () => {
-			const width = totalColumnWidth(columns.map((column) => this.columnWidths[column.id] ?? 140));
-			table.style.width = `${width}px`;
-			scrollbarSpacer.style.width = `${width}px`;
-		};
-		updateTableWidth();
-		const header = table.createEl('thead').createEl('tr');
-		for (const column of columns) {
-			const cell = header.createEl('th');
-			cell.style.width = `${this.columnWidths[column.id] ?? 140}px`;
-			const button = cell.createEl('button', { text: column.name });
-			button.addEventListener('click', () => { this.sortAscending = this.sortColumn === column.id ? !this.sortAscending : true; this.sortColumn = column.id; this.render(); });
-			const handle = cell.createSpan({ cls: 'op-column-resize-handle' });
-			handle.addEventListener('pointerdown', (event) => {
-				event.preventDefault();
-				event.stopPropagation();
-				const startX = event.clientX;
-				const startWidth = this.columnWidths[column.id] ?? cell.getBoundingClientRect().width;
-				handle.setPointerCapture(event.pointerId);
-				const move = (moveEvent: PointerEvent) => {
-					const width = resizeColumnWidth(startWidth, moveEvent.clientX - startX);
-					cell.style.width = `${width}px`;
-					this.columnWidths[column.id] = width;
-					updateTableWidth();
-				};
-				handle.addEventListener('pointermove', move);
-				handle.addEventListener('pointerup', () => handle.removeEventListener('pointermove', move), { once: true });
-			});
-		}
-		const body = table.createEl('tbody');
-		let rendered = 0;
-		const appendChunk = () => {
-			for (const task of sorted.slice(rendered, rendered + 100)) {
-				const row = body.createEl('tr');
-				for (const column of columns) {
-					const cell = row.createEl('td');
-					cell.style.width = `${this.columnWidths[column.id] ?? 140}px`;
-					if (column.id === 'key') {
-						const key = cell.createSpan({ cls: 'op-task-key-cell' });
-						const taskType = task.project.taskTypes.find((type) => type.id === task.document.metadata.taskTypeId);
-						renderTaskMarker(key, taskType);
-						key.createSpan({ text: task.document.metadata.key });
-					} else if (column.id === 'title') {
-						const taskType = task.project.taskTypes.find((type) => type.id === task.document.metadata.taskTypeId);
-						renderTaskTitle(cell, taskType, task.document.metadata.title, { tagName: 'span', showMarker: false });
-					} else if (column.id === 'tags') {
-						renderTags(cell, task.document.metadata.tags, this.manager);
-					} else if (column.id === 'links') {
-						renderTaskMarkdownValue(cell, task.document.unknownLinks.join('\n\n'), task, this.manager, this);
-					} else if (column.id === 'subtasks') {
-						renderTaskMarkdownValue(cell, task.document.subtasks ?? '', task, this.manager, this);
-					} else if (column.id === 'relations') {
-						renderTaskRelations(cell, task, this.manager);
-					} else {
-						cell.setText(this.columnValue(task, column.id));
-					}
-				}
-				row.addEventListener('click', (event) => {
-					if (!isInteractiveTaskCardTarget(event.target)) new EditTaskModal(this.manager, task).open();
-				});
-			}
-			rendered = Math.min(sorted.length, rendered + 100);
-		};
-		appendChunk();
-		let syncingHorizontalScroll = false;
-		const syncScroll = (source: HTMLElement, target: HTMLElement) => {
-			if (syncingHorizontalScroll) return;
-			syncingHorizontalScroll = true;
-			target.scrollLeft = source.scrollLeft;
-			syncingHorizontalScroll = false;
-		};
-		viewport.addEventListener('scroll', () => {
-			syncScroll(viewport, scrollbar);
-			if (viewport.scrollTop + viewport.clientHeight >= viewport.scrollHeight - 80 && rendered < sorted.length) appendChunk();
-		});
-		scrollbar.addEventListener('scroll', () => syncScroll(scrollbar, viewport));
 	}
 	private columnDefinitions(fields: readonly TaskDisplayField[]): Array<{ id: string; name: string }> {
 		const definitions: Partial<Record<TaskDisplayField, { id: string; name: string }>> = {
@@ -580,12 +567,14 @@ export class ProjectView extends ItemView {
 			priority: { id: 'priority', name: '优先级' },
 			reporter: { id: 'reporter', name: '提报人' },
 			assignee: { id: 'assignee', name: '经办人' },
+			scheduledDate: { id: 'scheduledDate', name: '计划日期' },
 			startDate: { id: 'startDate', name: '开始日期' },
-			dueDate: { id: 'dueDate', name: '计划完成日期' },
+			dueDate: { id: 'dueDate', name: '截止日期' },
+			endDate: { id: 'endDate', name: '结束日期' },
 			tags: { id: 'tags', name: '标签' },
 			relations: { id: 'relations', name: '任务关系' },
 			links: { id: 'links', name: '链接' },
-			subtasks: { id: 'subtasks', name: '子任务' },
+			subtasks: { id: 'subtasks', name: '任务' },
 		};
 		const customFields = [...new Map(this.scopedProjects().flatMap((item) => item.customFields).map((field) => [field.key, field])).values()];
 		return fields.flatMap((field) => {
@@ -613,7 +602,8 @@ export class ProjectView extends ItemView {
 			status: task.project.workflow.statuses.find((item) => item.id === metadata.statusId)?.name ?? metadata.statusId,
 			priority: metadata.priority ?? '',
 			reporter: person(metadata.reporterId), assignee: person(metadata.assigneeId),
-			startDate: displayDateTime(metadata.startDate), dueDate: displayDateTime(metadata.dueDate),
+			scheduledDate: displayDateTime(metadata.scheduledDate ?? null), dueDate: displayDateTime(metadata.dueDate),
+			startDate: displayDateTime(metadata.startDate), endDate: displayDateTime(metadata.endDate ?? null),
 			tags: metadata.tags.map((tag) => `#${tag}`).join(' '),
 			relations: task.document.relations.filter((relation) => relation.type === 'related').map((relation) => `${relation.targetKey} · ${relation.targetTitle}`).join('\n'),
 			links: task.document.unknownLinks.join('\n'),
@@ -622,33 +612,44 @@ export class ProjectView extends ItemView {
 	}
 	private renderBoard(parent: HTMLElement, tasks: ReturnType<typeof filterProjectTasks>): void {
 		const fields = this.displayFields('board');
-		const project = this.manager.projects.find((item) => item.uid === this.projectUid);
+		const rules = this.manager.projectViewDisplay.behavior.board;
 		const board = parent.createDiv({ cls: 'op-board' });
-		if (this.projectUid === ALL_PROJECTS_UID) {
-			for (const [category, name] of [['todo', '未开始'], ['in_progress', '处理中'], ['done', '已结束']] as const) {
-				const column = board.createDiv({ cls: 'op-board-column' });
-				column.createEl('h4', { text: name });
-				for (const task of tasks.filter((item) => item.project.workflow.statuses.find((status) => status.id === item.document.metadata.statusId)?.category === category)) {
-					this.renderBoardCard(column, task, false, fields);
-				}
-			}
-			return;
-		}
-		for (const status of project?.workflow.statuses ?? []) {
+		for (const [category, name] of [['todo', '未开始'], ['in_progress', '处理中'], ['done', '已完成']] as const) {
+			if (category === 'done' && !rules.showCompletedColumn) continue;
 			const column = board.createDiv({ cls: 'op-board-column' });
-			column.dataset.statusId = status.id;
-			column.addEventListener('dragover', (event) => event.preventDefault());
-			column.addEventListener('drop', (event) => {
-				event.preventDefault();
-				const uid = event.dataTransfer?.getData('text/plain');
-				const task = uid ? this.manager.index.get(uid) : undefined;
-				if (task) void this.moveCard(task, status.id);
-			});
-			column.createEl('h4', { text: status.name });
-			for (const task of tasks.filter((item) => item.document.metadata.statusId === status.id)) {
-				this.renderBoardCard(column, task, true, fields);
+			column.dataset.statusGroup = category;
+			if (rules.autoUpdateStatusOnDrop) {
+				column.addEventListener('dragover', (event) => event.preventDefault());
+				column.addEventListener('drop', (event) => {
+					event.preventDefault();
+					const uid = event.dataTransfer?.getData('text/plain');
+					const task = uid ? this.manager.index.get(uid) : undefined;
+					if (task) void this.moveCardToBoardGroup(task, category);
+				});
+			}
+			const grouped = tasks.filter((task) => this.boardGroup(task) === category);
+			column.createEl('h4', { text: `${name} · ${grouped.length}` });
+			for (const task of grouped) {
+				this.renderBoardCard(column, task, rules.autoUpdateStatusOnDrop, fields);
 			}
 		}
+	}
+	private boardGroup(task: IndexedTask): 'todo' | 'in_progress' | 'done' {
+		const rules = this.manager.projectViewDisplay.behavior.board;
+		for (const category of ['todo', 'in_progress', 'done'] as const) {
+			if (rules.groupStatusIds[category].includes(task.document.metadata.statusId)) return category;
+		}
+		return task.project.workflow.statuses.find((status) => status.id === task.document.metadata.statusId)?.category ?? 'todo';
+	}
+	private async moveCardToBoardGroup(task: IndexedTask, category: 'todo' | 'in_progress' | 'done'): Promise<void> {
+		if (this.boardGroup(task) === category) return;
+		const configured = this.manager.projectViewDisplay.behavior.board.groupStatusIds[category];
+		const candidates = task.project.workflow.statuses.filter((status) => configured.includes(status.id) || (configured.length === 0 && status.category === category));
+		const transitions = new Set(task.project.workflow.transitions
+			.filter((transition) => transition.from === task.document.metadata.statusId)
+			.map((transition) => transition.to));
+		const target = candidates.find((status) => transitions.has(status.id)) ?? candidates[0];
+		if (target) await this.moveCard(task, target.id);
 	}
 	private renderBoardCard(parent: HTMLElement, task: IndexedTask, draggable: boolean, fields: readonly TaskDisplayField[]): void {
 		const card = parent.createDiv({ cls: 'op-board-card', attr: { role: 'button', tabindex: '0', 'aria-label': task.document.metadata.title } });
@@ -672,6 +673,7 @@ export class ProjectView extends ItemView {
 	}
 	private renderCalendar(parent: HTMLElement, tasks: ReturnType<typeof filterProjectTasks>): void {
 		const fields = this.displayFields('calendar');
+		const rules = this.manager.projectViewDisplay.behavior.calendar;
 		const controls = parent.createDiv({ cls: 'op-calendar-controls' });
 		const changePeriod = (delta: number) => {
 			this.calendarCursor = moveCalendarCursor(this.calendarCursor, this.calendarMode, delta);
@@ -692,33 +694,75 @@ export class ProjectView extends ItemView {
 		}
 		const grid = parent.createDiv({ cls: `op-calendar-grid is-${this.calendarMode}` });
 		for (const weekday of ['一', '二', '三', '四', '五', '六', '日']) grid.createDiv({ cls: 'op-calendar-weekday', text: weekday });
-		const items = calendarItems(tasks);
+		const items = calendarItems(tasks, rules.dateSource);
 		const dates = this.calendarMode === 'week' ? calendarWeekDates(this.calendarCursor) : calendarMonthCells(this.calendarCursor);
-		for (const date of dates) this.renderCalendarDateCell(grid, date, items, fields);
+		const spans = layoutCalendarSpans(items, dates);
+		for (let row = 0; row < Math.ceil(dates.length / 7); row += 1) {
+			this.renderCalendarWeekRow(grid, dates.slice(row * 7, row * 7 + 7), spans.filter((span) => span.row === row), fields);
+		}
 	}
-	private renderCalendarDateCell(
+	private renderCalendarWeekRow(
 		grid: HTMLElement,
-		date: string | null,
-		items: ReturnType<typeof calendarItems>,
+		dates: readonly (string | null)[],
+		spans: readonly CalendarSpanLayout[],
 		fields: readonly TaskDisplayField[],
 	): void {
-		if (!date) {
-			grid.createDiv({ cls: 'op-calendar-day is-empty' });
-			return;
+		const week = grid.createDiv({ cls: 'op-calendar-week-row' });
+		week.style.setProperty('--op-calendar-lanes', String(Math.max(1, ...spans.map((span) => span.lane + 1))));
+		const days = week.createDiv({ cls: 'op-calendar-day-layer' });
+		for (const date of dates) {
+			const cell = days.createDiv({ cls: `op-calendar-day${date ? '' : ' is-empty'}` });
+			if (!date) continue;
+			cell.dataset.date = date;
+			if (this.manager.projectViewDisplay.behavior.calendar.autoUpdateDateOnDrop) {
+				cell.addEventListener('dragover', (event) => event.preventDefault());
+				cell.addEventListener('drop', (event) => {
+					event.preventDefault();
+					const uid = event.dataTransfer?.getData('text/plain');
+					const task = uid ? this.manager.index.get(uid) : undefined;
+					if (task) void this.moveCalendarCard(task, date);
+				});
+			}
+			cell.createEl('strong', { text: this.calendarMode === 'week' ? `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}` : String(Number(date.slice(8, 10))) });
 		}
-		const cell = grid.createDiv({ cls: 'op-calendar-day' });
-		cell.dataset.date = date;
-		cell.createEl('strong', { text: this.calendarMode === 'week' ? `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}` : String(Number(date.slice(8, 10))) });
-		for (const item of items.filter((candidate) => candidate.start <= date && candidate.end >= date)) {
-			const task = this.manager.index.get(item.uid);
+		const layer = week.createDiv({ cls: 'op-calendar-span-layer' });
+		for (const span of spans) {
+			const task = this.manager.index.get(span.item.uid);
 			if (!task) continue;
-			const button = cell.createDiv({ cls: 'op-calendar-task', attr: { role: 'button', tabindex: '0', 'aria-label': task.document.metadata.title } });
+			const button = layer.createDiv({ cls: 'op-calendar-task', attr: { role: 'button', tabindex: '0', 'aria-label': task.document.metadata.title } });
+			button.style.gridColumn = `${span.columnStart} / span ${span.columnSpan}`;
+			button.style.gridRow = String(span.lane + 1);
+			button.draggable = this.manager.projectViewDisplay.behavior.calendar.autoUpdateDateOnDrop;
+			if (button.draggable) button.addEventListener('dragstart', (event) => event.dataTransfer?.setData('text/plain', task.document.metadata.uid));
 			renderTaskCardFields(button, task, this.manager, fields, {
 				titleClassName: 'op-calendar-task-title', compact: true, component: this, markerBeforeKey: true, priorityInCorner: true,
 				keyTitleInline: true,
 			});
 			bindTaskCardActivation(button, () => new EditTaskModal(this.manager, task).open());
 		}
+	}
+	private async moveCalendarCard(task: IndexedTask, targetDate: string): Promise<void> {
+		const source = this.manager.projectViewDisplay.behavior.calendar.dateSource;
+		const document = structuredClone(task.document);
+		const metadata = document.metadata;
+		const shift = (value: string | null | undefined, from: string): string | null => {
+			if (!value) return null;
+			const days = Math.round((Date.parse(`${value.slice(0, 10)}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+			const next = new Date(`${targetDate}T00:00:00Z`);
+			next.setUTCDate(next.getUTCDate() + days);
+			return next.toISOString().slice(0, 10);
+		};
+		if (source === 'planned-range') {
+			const from = (metadata.scheduledDate ?? metadata.dueDate)?.slice(0, 10) ?? targetDate;
+			metadata.scheduledDate = targetDate;
+			if (metadata.dueDate) metadata.dueDate = shift(metadata.dueDate, from);
+		} else if (source === 'execution-range') {
+			const from = (metadata.startDate ?? metadata.endDate)?.slice(0, 10) ?? targetDate;
+			metadata.startDate = targetDate;
+			if (metadata.endDate) metadata.endDate = shift(metadata.endDate, from);
+		} else metadata[source] = targetDate;
+		try { await this.manager.saveTask(task, document); }
+		catch (error) { new Notice(error instanceof Error ? error.message : String(error)); this.render(); }
 	}
 	private displayFields(mode: Mode): readonly TaskDisplayField[] {
 		return this.manager.projectViewDisplay[mode];

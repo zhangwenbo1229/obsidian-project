@@ -10,6 +10,8 @@ export const BUILT_IN_TASK_TEMPLATES = {
 
 export const RESERVED_TASK_HEADINGS = [
 	'任务正文',
+	'项目描述',
+	'任务',
 	'链接',
 	'备注',
 ] as const;
@@ -24,8 +26,10 @@ export const RESERVED_TASK_KEYS = new Set([
 	'task-type-id',
 	'task-priority',
 	'created-at',
+	'scheduled-date',
 	'start-date',
 	'due-date',
+	'end-date',
 	'completed-at',
 	'terminated-at',
 	'reporter-id',

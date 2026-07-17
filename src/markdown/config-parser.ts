@@ -48,6 +48,7 @@ export function parseGlobalConfigMarkdown(
 				name: text(person.name),
 				active: person.active as boolean,
 			})),
+			personMetadataFields: [],
 		};
 		const validation = validateGlobalConfig(config);
 		return { config, issues: validation.issues };

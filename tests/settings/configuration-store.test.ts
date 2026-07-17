@@ -7,6 +7,7 @@ const snapshot: ConfigurationSnapshot = {
 		kind: 'global-config', schema: 1, projectConfigDirectory: 'legacy/projects',
 		defaultTaskDirectory: 'tasks', currentUserId: '8a67a66f-0109-47b3-9463-5d05b4295949',
 		people: [{ id: '8a67a66f-0109-47b3-9463-5d05b4295949', name: '用户', active: true }],
+		personMetadataFields: [],
 	},
 	projects: [],
 	tagOrder: [],
@@ -31,6 +32,20 @@ describe('configuration store migration', () => {
 		expect(normalized.projectViewDisplay.board).toContain('status');
 		expect(normalized.projectViewDisplay.calendar).toContain('title');
 		expect(normalized.projectViewDisplay.quadrants).toContain('priority');
+		expect(normalized.globalConfig.personMetadataFields).toEqual([]);
+	});
+
+	it('migrates legacy person title, icon and color values into person metadata', () => {
+		const legacy = structuredClone(snapshot);
+		legacy.globalConfig.people[0] = {
+			...legacy.globalConfig.people[0]!, title: '设计师', icon: 'palette', color: '#ff3366',
+		} as unknown as typeof legacy.globalConfig.people[number];
+		const normalized = normalizeConfigurationSnapshot(legacy);
+		expect(normalized.globalConfig.people[0]).toMatchObject({
+			name: '用户', metadata: { title: '设计师', icon: 'palette', color: '#ff3366' },
+		});
+		expect(normalized.globalConfig.people[0]).not.toHaveProperty('title');
+		expect(normalized.globalConfig.personMetadataFields?.map((field) => field.key)).toEqual(['title', 'icon', 'color']);
 	});
 
 	it('persists and verifies legacy configuration before deleting Markdown files', async () => {

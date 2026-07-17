@@ -17,7 +17,7 @@ describe('live Markdown editor', () => {
 	});
 
 	it('uses the shared editor for task bodies and notes in create and edit dialogs', () => {
-		expect(createSource.match(/\brenderMarkdownEditor\(/g)?.length).toBe(3);
-		expect(editSource.match(/\brenderMarkdownEditor\(/g)?.length).toBe(4);
+		expect(createSource.match(/\brenderMarkdownEditor\(/g)?.length).toBe(2);
+		expect(editSource.match(/\brenderMarkdownEditor\(/g)?.length).toBe(3);
 	});
 });

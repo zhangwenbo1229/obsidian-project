@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { DASHBOARD_MODULE_DEFINITIONS } from '../../src/views/dashboard-modules/registry';
 
@@ -13,16 +13,44 @@ const chart = readFileSync(new URL('../../src/views/dashboard-modules/chart-card
 const todo = readFileSync(new URL('../../src/views/dashboard-modules/todo-card.ts', import.meta.url), 'utf8');
 
 describe('dashboard module presentation', () => {
-	it('uses dedicated renderers for all six custom module cards', () => {
+	it('keeps the todo inline editor aligned with the content grid column', () => {
+		expect(css).toMatch(/\.op-todo-inline-editor[^{]*\{[^}]*min-width:\s*0[^}]*width:\s*100%/u);
+		expect(todo).toContain('text.insertAdjacentElement');
+	});
+	it('uses dedicated renderers for all custom module cards', () => {
 		for (const name of ['weatherDefinition', 'calendarDefinition', 'noteStatsDefinition', 'recentFilesDefinition', 'newsDefinition', 'directoryDefinition', 'textDefinition', 'chartDefinition']) {
 			expect(registry).toContain(name);
 		}
-		expect(DASHBOARD_MODULE_DEFINITIONS).toHaveLength(12);
+		expect(DASHBOARD_MODULE_DEFINITIONS).toHaveLength(15);
+	});
+
+	it('renders configured web widgets in a lazy sandboxed iframe', () => {
+		const iframeUrl = new URL('../../src/views/dashboard-modules/iframe-card.ts', import.meta.url);
+		expect(existsSync(iframeUrl)).toBe(true);
+		if (!existsSync(iframeUrl)) return;
+		const iframe = readFileSync(iframeUrl, 'utf8');
+		expect(iframe).toContain("createEl('iframe'");
+		expect(iframe).toContain("sandbox: 'allow-forms allow-popups allow-scripts allow-same-origin'");
+		expect(iframe).toContain("referrerpolicy: 'no-referrer'");
+		expect(iframe).toContain("loading: 'lazy'");
+		expect(css).toContain('.op-iframe-card-frame');
+		expect(iframe).toContain('ResizeObserver');
+		expect(iframe).toContain('clientWidth');
+		expect(iframe).toContain('clientHeight');
+		expect(iframe).toContain('context.component.register');
+		expect(css).not.toMatch(/\.op-iframe-card-frame\s*\{[^}]*min-height:\s*220px/u);
+		expect(css).toMatch(/\.op-dashboard-module-card\.is-iframe\s*\{[^}]*padding:\s*0[^}]*background:\s*transparent/u);
+		expect(personal).toContain('op-dashboard-drag-handle');
+		expect(personal).toContain("setIcon(dragHandle, 'grip-horizontal')");
+		expect(personal).toContain("setIcon(handle, 'move-diagonal-2')");
+		expect(css).toMatch(/\.op-dashboard-module-card\.is-iframe:hover \.op-dashboard-drag-handle[^}]*opacity:\s*1/u);
+		expect(css).toMatch(/\.op-dashboard-module-card\.is-iframe:hover \.op-dashboard-resize-handle[^}]*opacity:\s*1/u);
 	});
 
 	it('builds the activity heatmap from every Vault file', () => {
 		expect(heatmap).toContain('vault.getFiles()');
 		expect(heatmap).not.toContain('vault.getMarkdownFiles()');
+		expect(heatmap).toContain("icon: 'layout-grid'");
 	});
 
 	it('keeps chart labels readable at regular and narrow card widths', () => {
@@ -34,17 +62,48 @@ describe('dashboard module presentation', () => {
 
 	it('lets the chart canvas consume the available card body', () => {
 		expect(css).toMatch(/\.op-chart-card\s*\{[^}]*flex:\s*1/u);
-		expect(css).toMatch(/\.op-chart-svg\s*\{[^}]*min-height:\s*220px/u);
+		expect(css).toMatch(/\.op-chart-svg\s*\{[^}]*min-height:\s*0/u);
 		expect(chart).toContain("preserveAspectRatio: 'xMidYMid meet'");
+		expect(chart).toContain('ResizeObserver');
+		expect(chart).toContain('clientWidth');
 	});
 
-	it('separates todo editing from source navigation without a click timer race', () => {
+	it('uses the same semicircle gauge structure for percentage and check-in cards', () => {
+		const checkIn = readFileSync(new URL('../../src/views/dashboard-modules/check-in-card.ts', import.meta.url), 'utf8');
+		expect(personal).toContain('op-semicircle-gauge');
+		expect(checkIn).toContain('op-semicircle-gauge');
+		expect(css).toContain('.op-semicircle-gauge');
+		expect(css).toMatch(/\.op-check-in-progress\.is-linear\s*>\s*span\s*\{/u);
+		expect(css).not.toMatch(/\.op-check-in-progress\s*>\s*span\s*\{/u);
+		expect(css).toMatch(/\.op-semicircle-gauge-track\s*\{[^}]*width:\s*100%/u);
+	});
+
+	it('renders a configurable icon for calendar check-in data', () => {
+		expect(calendar).toContain('config.checkInIcon');
+		expect(calendar).toContain('setIcon');
+	});
+
+	it('edits and completes todos without exposing source paths', () => {
 		expect(todo).toContain('op-todo-text');
-		expect(todo).toContain('op-todo-source');
 		expect(todo).toContain("text.addEventListener('dblclick'");
-		expect(todo).toContain("source.addEventListener('click'");
+		expect(todo).toContain("checkbox.addEventListener('change'");
+		expect(todo).not.toContain('op-todo-source');
+		expect(todo).not.toContain('打开来源');
 		expect(todo).not.toContain('openTimer');
 		expect(todo).not.toContain('window.setTimeout');
+	});
+
+	it('uses four visibly distinct heatmap intensity levels', () => {
+		for (const level of [1, 2, 3, 4]) expect(css).toContain(`.op-heatmap-cell.is-level-${level}`);
+		expect(css).toMatch(/\.op-heatmap-cell\.is-level-1\s*\{[^}]*28%/u);
+		expect(css).toMatch(/\.op-heatmap-cell\.is-level-4\s*\{[^}]*100%/u);
+	});
+
+	it('keeps todo text immediately left-aligned beside its checkbox', () => {
+		expect(css).toMatch(/\.op-todo-item\s*>\s*\.op-todo-checkbox\s*\{[^}]*grid-column:\s*1/u);
+		expect(css).toMatch(/\.op-todo-item\s*>\s*\.op-todo-content\s*\{[^}]*grid-column:\s*2/u);
+		expect(css).toMatch(/\.op-todo-text\s*\{[^}]*justify-content:\s*stretch[^}]*justify-items:\s*start/u);
+		expect(css).toMatch(/\.op-todo-item,\s*\.op-todo-text\s*\{[^}]*box-shadow:\s*none\s*!important/u);
 	});
 
 	it('keeps weather and news disabled until the user opts in', () => {

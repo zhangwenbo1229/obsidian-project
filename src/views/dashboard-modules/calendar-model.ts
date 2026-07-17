@@ -97,7 +97,7 @@ export function getChineseCalendarMetadata(date: Date): ChineseCalendarMetadata 
 
 export function formatChineseLunarDay(date: Date): string {
 	const metadata = getChineseCalendarMetadata(date);
-	return `${metadata.lunarMonth}${metadata.lunarDay}`;
+	return metadata.lunarDay;
 }
 
 export function getSolarTerm(date: Date): string | undefined {
@@ -134,7 +134,7 @@ export function buildCalendarMonth(
 		const solarTerm = inCurrentMonth && showHolidays ? getSolarTerm(date) : undefined;
 		const gregorianFestival = inCurrentMonth && showHolidays ? GREGORIAN_FESTIVALS[isoDate.slice(5)] : undefined;
 		const festivals = [gregorianFestival, ...(lunar?.lunarFestivals ?? []), solarTerm].filter((value): value is string => Boolean(value));
-		const lunarLabel = inCurrentMonth && showLunar ? `${lunar?.lunarMonth ?? ''}${lunar?.lunarDay ?? ''}` : undefined;
+		const lunarLabel = inCurrentMonth && showLunar ? lunar?.lunarDay : undefined;
 		return {
 			isoDate,
 			day: inCurrentMonth ? date.getDate() : null,

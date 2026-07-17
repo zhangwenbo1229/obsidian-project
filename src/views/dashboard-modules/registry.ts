@@ -11,6 +11,9 @@ import { chartDefinition } from './chart-card';
 import { countdownDefinition, dateDefinition } from './date-card';
 import { todoDefinition } from './todo-card';
 import { heatmapDefinition } from './heatmap-card';
+import { checkInDefinition } from './check-in-card';
+import { iframeDefinition } from './iframe-card';
+import { timeProgressDefinition } from './time-progress-card';
 
 export const DASHBOARD_MODULE_DEFINITIONS: DashboardModuleDefinition[] = [
 	weatherDefinition,
@@ -24,7 +27,10 @@ export const DASHBOARD_MODULE_DEFINITIONS: DashboardModuleDefinition[] = [
 	textDefinition,
 	chartDefinition,
 	countdownDefinition,
+	timeProgressDefinition,
+	checkInDefinition,
 	heatmapDefinition,
+	iframeDefinition,
 ];
 
 export function getDashboardModuleDefinition(kind: string): DashboardModuleDefinition | undefined {

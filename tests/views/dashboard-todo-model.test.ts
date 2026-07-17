@@ -8,6 +8,19 @@ import {
 } from '../../src/views/dashboard-modules/todo-model';
 
 describe('dashboard todo model', () => {
+	it('separates Tasks metadata from the visible todo title', () => {
+		const [todo] = extractIncompleteTodos('- [ ] 发布版本 #release 🔼 📅 2026-07-20 🆔 abc123', '项目/发布.md');
+		expect(todo).toMatchObject({
+			text: '发布版本', path: '项目/发布.md', line: 1,
+			metadata: { priority: 'medium', dueDate: '2026-07-20', id: 'abc123', tags: ['release'] },
+		});
+	});
+
+	it('preserves Tasks metadata when editing todo text', () => {
+		const source = '- [ ] 旧标题 #release 📅 2026-07-20 🆔 abc123\n';
+		expect(setMarkdownTodoText(source, 1, '旧标题', '新标题'))
+			.toBe('- [ ] 新标题 #release 📅 2026-07-20 🆔 abc123\n');
+	});
 	it('extracts common incomplete Markdown task markers with line numbers', () => {
 		expect(extractIncompleteTodos('- [ ] First\n* [x] Done\n+ [ ] Third\n  - [ ] Nested', 'Work/a.md')).toEqual([
 			{ text: 'First', path: 'Work/a.md', line: 1 },

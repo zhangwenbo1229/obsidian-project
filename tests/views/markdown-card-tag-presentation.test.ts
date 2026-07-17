@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 const cardFields = readFileSync(new URL('../../src/views/task-card-fields.ts', import.meta.url), 'utf8');
 const project = readFileSync(new URL('../../src/views/project-view.ts', import.meta.url), 'utf8');
+const projectList = readFileSync(new URL('../../src/views/project-list-renderer.ts', import.meta.url), 'utf8');
 const personal = readFileSync(new URL('../../src/views/personal-view.ts', import.meta.url), 'utf8');
 const integration = readFileSync(new URL('../../src/integrations/builtin-tag-editor.ts', import.meta.url), 'utf8');
 const markerPicker = readFileSync(new URL('../../src/modals/task-marker-picker-modal.ts', import.meta.url), 'utf8');
@@ -14,7 +15,9 @@ describe('Markdown task fields and shared card presentation', () => {
 		expect(cardFields).toContain('MarkdownRenderer');
 		expect(cardFields).toContain('component: Component');
 		expect(cardFields).toMatch(/MarkdownRenderer\.render\([\s\S]*task\.path[\s\S]*options\.component/u);
-		expect(project).toContain('renderTaskMarkdownValue');
+		expect(project).toContain('renderProjectList');
+		expect(projectList).toContain('renderTaskListField');
+		expect(cardFields).toContain('renderTaskMarkdownValue');
 	});
 
 	it('uses accessible non-button cards so rendered links and checkboxes remain valid', () => {
@@ -61,7 +64,7 @@ describe('marker and tag style presentation', () => {
 			expect(helper).not.toContain('`#${tag}`');
 		}
 		expect(cardFields).toContain('renderTags');
-		expect(project).toContain('renderTags');
+		expect(projectList).toContain('renderTaskListField');
 	});
 
 	it('adds a right-click style editor to the built-in Tags pane', () => {
@@ -103,7 +106,7 @@ describe('marker and tag style presentation', () => {
 		expect(relationPresentation).toContain("createEl('a'");
 		expect(relationPresentation).not.toContain("createEl('button'");
 		expect(cardFields).toContain('renderTaskRelations');
-		expect(project).toContain('renderTaskRelations');
+		expect(projectList).toContain('renderTaskListField');
 	});
 
 	it('aligns link field labels with rendered Markdown content', () => {

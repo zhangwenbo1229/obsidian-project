@@ -16,7 +16,7 @@ const CARD_KIND_LABELS = Object.fromEntries([
 	...Object.entries({
 	number: '数字',
 	percentage: '百分比',
-	'task-list': '任务列表',
+	'task-list': '项目',
 	}),
 	...DASHBOARD_MODULE_CATALOG.map((item) => [item.kind, item.label]),
 ]) as Record<DashboardCardKind, string>;
@@ -48,6 +48,7 @@ export class DashboardCardSettingsModal extends Modal {
 	private percentageTarget: number;
 	private percentageValue: number;
 	private percentageDisplay: 'number' | 'progress';
+	private percentageProgressStyle: 'linear' | 'semicircle';
 
 	constructor(
 		private readonly manager: ProjectManager,
@@ -73,6 +74,7 @@ export class DashboardCardSettingsModal extends Modal {
 		this.percentageTarget = card.percentageTarget ?? 100;
 		this.percentageValue = card.percentageValue ?? 0;
 		this.percentageDisplay = card.percentageDisplay ?? 'number';
+		this.percentageProgressStyle = card.percentageProgressStyle ?? 'linear';
 	}
 
 	onOpen(): void {
@@ -177,7 +179,7 @@ export class DashboardCardSettingsModal extends Modal {
 		new Setting(this.contentEl)
 			.setName('文字大小')
 			.setDesc('仅调整当前卡片，范围为 10–28 px。')
-			.addSlider((slider) => slider.setLimits(10, 28, 1).setDynamicTooltip().setValue(this.fontSize).onChange((value) => (this.fontSize = value)));
+			.addSlider((slider) => slider.setLimits(8, 40, 1).setDynamicTooltip().setValue(this.fontSize).onChange((value) => (this.fontSize = value)));
 	}
 
 	private renderMetricSetting(): void {
@@ -231,6 +233,11 @@ export class DashboardCardSettingsModal extends Modal {
 			.addOption('progress', '进度条')
 			.setValue(this.percentageDisplay)
 			.onChange((value) => (this.percentageDisplay = value === 'progress' ? 'progress' : 'number')));
+	if (this.percentageDisplay === 'progress') new Setting(this.contentEl).setName('进度样式').addDropdown((dropdown) => dropdown
+		.addOption('linear', '直线')
+		.addOption('semicircle', '半圆')
+		.setValue(this.percentageProgressStyle)
+		.onChange((value) => (this.percentageProgressStyle = value === 'semicircle' ? 'semicircle' : 'linear')));
 	}
 
 	private renderDisplayFields(): void {
@@ -262,6 +269,7 @@ export class DashboardCardSettingsModal extends Modal {
 					percentageTarget: this.percentageTarget,
 					percentageValue: this.percentageValue,
 					percentageDisplay: this.percentageDisplay,
+					percentageProgressStyle: this.percentageProgressStyle,
 					moduleConfig: isDashboardModuleKind(this.kind) ? this.moduleConfig : undefined,
 				},
 			));

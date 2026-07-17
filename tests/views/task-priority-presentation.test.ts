@@ -15,4 +15,11 @@ describe('task priority presentation', () => {
 		expect(projectSource).toContain("displayFields('calendar')");
 		expect(projectSource).toContain("displayFields('quadrants')");
 	});
+
+	it('feeds template priority options into create, edit, and list editors', () => {
+		const create = readFileSync(new URL('../../src/modals/create-task-modal.ts', import.meta.url), 'utf8');
+		const edit = readFileSync(new URL('../../src/modals/edit-task-modal.ts', import.meta.url), 'utf8');
+		const list = readFileSync(new URL('../../src/views/project-list-inline-editor.ts', import.meta.url), 'utf8');
+		for (const source of [create, edit, list]) expect(source).toContain('taskFieldOptions');
+	});
 });

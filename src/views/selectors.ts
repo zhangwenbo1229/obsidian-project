@@ -1,5 +1,7 @@
 import type { IndexedTask, TaskStatistics } from '../index/task-index';
+import type { ProjectPriority } from '../domain/types';
 import { datePart } from '../utils/dates';
+import type { CalendarDateSource } from './task-display-settings';
 
 export const ALL_PROJECTS_UID = '*';
 
@@ -85,6 +87,19 @@ export type TaskQuadrant =
 	| 'notImportantUrgent'
 	| 'notImportantNotUrgent';
 
+export function priorityForQuadrantDrop(
+	current: ProjectPriority | undefined,
+	quadrant: TaskQuadrant,
+	importantPriorities: readonly ProjectPriority[],
+): ProjectPriority {
+	const targetImportant = quadrant === 'importantUrgent' || quadrant === 'importantNotUrgent';
+	const important = new Set(importantPriorities);
+	const normalizedCurrent = current ?? 'medium';
+	if (important.has(normalizedCurrent) === targetImportant) return normalizedCurrent;
+	if (targetImportant) return importantPriorities[0] ?? 'high';
+	return ['medium', 'low', 'high'].find((priority) => !important.has(priority)) ?? normalizedCurrent;
+}
+
 export type TaskQuadrants = Record<TaskQuadrant, IndexedTask[]>;
 
 function addIsoDays(value: string, days: number): string {
@@ -97,8 +112,9 @@ function addIsoDays(value: string, days: number): string {
 export function classifyTaskQuadrants(
 	tasks: readonly IndexedTask[],
 	today: string,
+	rules: { importantPriorities: readonly ProjectPriority[]; urgentWithinDays: number } = { importantPriorities: ['high'], urgentWithinDays: 3 },
 ): TaskQuadrants {
-	const urgentThrough = addIsoDays(today, 3);
+	const urgentThrough = addIsoDays(today, Math.max(0, rules.urgentWithinDays));
 	const quadrants: TaskQuadrants = {
 		importantUrgent: [],
 		importantNotUrgent: [],
@@ -106,7 +122,7 @@ export function classifyTaskQuadrants(
 		notImportantNotUrgent: [],
 	};
 	for (const task of tasks) {
-		const important = task.document.metadata.priority === 'high';
+		const important = Boolean(task.document.metadata.priority && rules.importantPriorities.includes(task.document.metadata.priority));
 		const dueDate = datePart(task.document.metadata.dueDate);
 		const urgent = Boolean(dueDate && dueDate <= urgentThrough);
 		const key: TaskQuadrant = important
@@ -171,10 +187,14 @@ export interface ProjectFilters {
 	statusCategories?: ReadonlySet<string>;
 	createdAtFrom?: string;
 	createdAtTo?: string;
+	scheduledDateFrom?: string;
+	scheduledDateTo?: string;
 	startDateFrom?: string;
 	startDateTo?: string;
 	dueDateFrom?: string;
 	dueDateTo?: string;
+	endDateFrom?: string;
+	endDateTo?: string;
 	completedAtFrom?: string;
 	completedAtTo?: string;
 	hasIncompleteSubtasks?: boolean;
@@ -195,8 +215,10 @@ export function activeProjectFilterCount(filters: ProjectFilters): number {
 	}
 	for (const [from, to] of [
 		[filters.createdAtFrom, filters.createdAtTo],
+		[filters.scheduledDateFrom, filters.scheduledDateTo],
 		[filters.startDateFrom, filters.startDateTo],
 		[filters.dueDateFrom, filters.dueDateTo],
+		[filters.endDateFrom, filters.endDateTo],
 		[filters.completedAtFrom, filters.completedAtTo],
 	]) {
 		if (from || to) count += 1;
@@ -250,8 +272,10 @@ export function filterProjectTasks(
 		if (!containsAny(metadata.assigneeId ? [metadata.assigneeId] : [], filters.assigneeIds)) return false;
 		if (!containsAny(metadata.tags, filters.tags)) return false;
 		if (!inRange(metadata.createdAt, filters.createdAtFrom, filters.createdAtTo)) return false;
+		if (!inRange(metadata.scheduledDate ?? null, filters.scheduledDateFrom, filters.scheduledDateTo)) return false;
 		if (!inRange(metadata.startDate, filters.startDateFrom, filters.startDateTo)) return false;
 		if (!inRange(metadata.dueDate, filters.dueDateFrom, filters.dueDateTo)) return false;
+		if (!inRange(metadata.endDate ?? null, filters.endDateFrom, filters.endDateTo)) return false;
 		if (!inRange(metadata.completedAt, filters.completedAtFrom, filters.completedAtTo)) return false;
 		if (filters.hasIncompleteSubtasks && !hasIncompleteMarkdownSubtask(task.document.subtasks)) return false;
 		for (const [key, selected] of Object.entries(filters.customFields ?? {})) {
@@ -296,18 +320,23 @@ export interface CalendarItem {
 	end: string;
 }
 
-export function calendarItems(tasks: readonly IndexedTask[]): CalendarItem[] {
+export function calendarItems(tasks: readonly IndexedTask[], source: CalendarDateSource = 'planned-range'): CalendarItem[] {
 	return tasks.flatMap((task) => {
 		const metadata = task.document.metadata;
-		if (!metadata.dueDate) return [];
-		const end = datePart(metadata.dueDate);
-		const requestedStart = datePart(metadata.startDate ?? metadata.dueDate);
+		const scheduled = datePart(metadata.scheduledDate ?? null);
+		const due = datePart(metadata.dueDate);
+		const start = datePart(metadata.startDate);
+		const endDate = datePart(metadata.endDate ?? null);
+		const single = source === 'scheduledDate' ? scheduled : source === 'dueDate' ? due : source === 'startDate' ? start : source === 'endDate' ? endDate : null;
+		const requestedStart = single ?? (source === 'execution-range' ? start || endDate : scheduled || (due ? due : start || endDate));
+		const requestedEnd = single ?? (source === 'execution-range' ? endDate || start : scheduled ? (due || scheduled) : due || endDate || start);
+		if (!requestedStart || !requestedEnd) return [];
 		return [{
 			uid: metadata.uid,
 			key: metadata.key,
 			title: metadata.title,
-			start: requestedStart <= end ? requestedStart : end,
-			end,
+			start: requestedStart <= requestedEnd ? requestedStart : requestedEnd,
+			end: requestedEnd,
 		}];
 	});
 }

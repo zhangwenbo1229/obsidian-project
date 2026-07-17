@@ -1,17 +1,35 @@
-import type { BuiltInTaskDisplayField, CustomFieldDefinition, TaskDisplayField } from '../domain/types';
+import type { BuiltInTaskDisplayField, CustomFieldDefinition, ProjectPriority, StatusCategory, TaskDisplayField, WorkflowStatus } from '../domain/types';
 
 export type ProjectViewMode = 'list' | 'board' | 'calendar' | 'quadrants';
+export type CalendarDateSource = 'planned-range' | 'execution-range' | 'scheduledDate' | 'dueDate' | 'startDate' | 'endDate';
+
+export interface ProjectViewBehaviorSettings {
+	board: {
+		groupStatusIds: Record<StatusCategory, string[]>;
+		showCompletedColumn: boolean;
+		autoUpdateStatusOnDrop: boolean;
+	};
+	calendar: {
+		dateSource: CalendarDateSource;
+		autoUpdateDateOnDrop: boolean;
+	};
+	quadrants: {
+		importantPriorities: ProjectPriority[];
+		urgentWithinDays: number;
+	};
+}
 
 export interface ProjectViewDisplaySettings {
 	list: TaskDisplayField[];
 	board: TaskDisplayField[];
 	calendar: TaskDisplayField[];
 	quadrants: TaskDisplayField[];
+	behavior: ProjectViewBehaviorSettings;
 }
 
 export const TASK_DISPLAY_FIELDS: readonly BuiltInTaskDisplayField[] = [
 	'key', 'title', 'project', 'type', 'status', 'priority',
-	'reporter', 'assignee', 'startDate', 'dueDate', 'tags',
+	'reporter', 'assignee', 'scheduledDate', 'dueDate', 'startDate', 'endDate', 'tags',
 	'relations', 'links', 'subtasks',
 ];
 
@@ -24,20 +42,27 @@ export const TASK_DISPLAY_FIELD_LABELS: Record<BuiltInTaskDisplayField | 'custom
 	priority: '优先级',
 	reporter: '报告人',
 	assignee: '经办人',
-	startDate: '开始时间',
-	dueDate: '截止时间',
+	scheduledDate: '计划日期',
+	dueDate: '截止日期',
+	startDate: '开始日期',
+	endDate: '结束日期',
 	tags: '标签',
 	customFields: '自定义字段',
 	relations: '任务关系',
 	links: '链接',
-	subtasks: '子任务',
+	subtasks: '任务',
 };
 
 export const DEFAULT_PROJECT_VIEW_DISPLAY: ProjectViewDisplaySettings = {
-	list: ['key', 'title', 'type', 'status', 'reporter', 'assignee', 'startDate', 'dueDate', 'customFields'],
-	board: ['key', 'title', 'project', 'type', 'status', 'assignee', 'dueDate', 'tags'],
+	list: ['key', 'title', 'type', 'status', 'reporter', 'assignee', 'scheduledDate', 'dueDate', 'startDate', 'endDate', 'customFields'],
+	board: ['key', 'title', 'project', 'type', 'status', 'assignee', 'scheduledDate', 'dueDate', 'tags'],
 	calendar: ['key', 'title', 'project', 'type'],
-	quadrants: ['key', 'title', 'project', 'type', 'priority', 'status', 'assignee', 'dueDate', 'tags'],
+	quadrants: ['key', 'title', 'project', 'type', 'priority', 'status', 'assignee', 'scheduledDate', 'dueDate', 'tags'],
+	behavior: {
+		board: { groupStatusIds: { todo: [], in_progress: [], done: [] }, showCompletedColumn: true, autoUpdateStatusOnDrop: true },
+		calendar: { dateSource: 'planned-range', autoUpdateDateOnDrop: false },
+		quadrants: { importantPriorities: ['high'], urgentWithinDays: 3 },
+	},
 };
 
 type DisplayCustomField = Pick<CustomFieldDefinition, 'key' | 'name'>;
@@ -84,12 +109,48 @@ function normalizeFields(
 export function normalizeProjectViewDisplay(
 	value?: Partial<ProjectViewDisplaySettings> | null,
 	customFields?: readonly DisplayCustomField[],
+	workflowStatuses: readonly Pick<WorkflowStatus, 'id' | 'category'>[] = [],
 ): ProjectViewDisplaySettings {
+	const behavior = value?.behavior;
+	const board = behavior?.board;
+	const groupStatusIds = board?.groupStatusIds;
+	const assignedStatusIds = new Set((['todo', 'in_progress', 'done'] as const).flatMap((category) =>
+		Array.isArray(groupStatusIds?.[category]) ? groupStatusIds[category] : [],
+	));
+	const normalizeStatusIds = (category: StatusCategory) => [
+		...(Array.isArray(groupStatusIds?.[category])
+			? [...new Set(groupStatusIds[category].filter((id): id is string => typeof id === 'string' && Boolean(id.trim())).map((id) => id.trim()))]
+			: []),
+		...workflowStatuses.filter((status) => status.category === category && !assignedStatusIds.has(status.id)).map((status) => status.id),
+	];
+	const calendarSource = behavior?.calendar?.dateSource;
+	const allowedDateSources = new Set<CalendarDateSource>(['planned-range', 'execution-range', 'scheduledDate', 'dueDate', 'startDate', 'endDate']);
+	const importantPriorities = Array.isArray(behavior?.quadrants?.importantPriorities)
+		? [...new Set(behavior.quadrants.importantPriorities.filter((priority): priority is ProjectPriority => typeof priority === 'string' && Boolean(priority.trim())).map((priority) => priority.trim()))]
+		: ['high'] as ProjectPriority[];
+	const urgentWithinDays = behavior?.quadrants?.urgentWithinDays;
 	return {
 		list: normalizeFields(value?.list, DEFAULT_PROJECT_VIEW_DISPLAY.list, customFields),
 		board: normalizeFields(value?.board, DEFAULT_PROJECT_VIEW_DISPLAY.board, customFields),
 		calendar: normalizeFields(value?.calendar, DEFAULT_PROJECT_VIEW_DISPLAY.calendar, customFields),
 		quadrants: normalizeFields(value?.quadrants, DEFAULT_PROJECT_VIEW_DISPLAY.quadrants, customFields),
+		behavior: {
+			board: {
+				groupStatusIds: { todo: normalizeStatusIds('todo'), in_progress: normalizeStatusIds('in_progress'), done: normalizeStatusIds('done') },
+				showCompletedColumn: board?.showCompletedColumn !== false,
+				autoUpdateStatusOnDrop: board?.autoUpdateStatusOnDrop !== false,
+			},
+			calendar: {
+				dateSource: typeof calendarSource === 'string' && allowedDateSources.has(calendarSource)
+					? calendarSource : 'planned-range',
+				autoUpdateDateOnDrop: behavior?.calendar?.autoUpdateDateOnDrop === true,
+			},
+			quadrants: {
+				importantPriorities,
+				urgentWithinDays: typeof urgentWithinDays === 'number' && Number.isFinite(urgentWithinDays)
+					? Math.min(365, Math.max(0, Math.round(urgentWithinDays))) : 3,
+			},
+		},
 	};
 }
 

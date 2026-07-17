@@ -125,6 +125,7 @@ describe('global config validation', () => {
 			defaultTaskDirectory: '项目管理/任务',
 			currentUserId: userId,
 			people: [],
+			personMetadataFields: [],
 		};
 
 		const result = validateGlobalConfig(config);
@@ -195,6 +196,14 @@ describe('task validation', () => {
 			data: task,
 			issues: [],
 		});
+	});
+
+	it('accepts a non-empty custom project priority configured by its template', () => {
+		const task = makeTask();
+		task.priority = 'critical';
+		expect(validateTaskMetadata(task).issues).not.toContainEqual(
+			expect.objectContaining({ code: 'invalid-priority' }),
+		);
 	});
 
 	it('accepts legacy dates and new zoned date-times for schedule fields', () => {

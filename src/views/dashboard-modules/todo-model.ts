@@ -1,7 +1,10 @@
+import { parseTasksLine, updateTasksLineCompletion, updateTasksLineTitle, type TasksLine } from '../../markdown/tasks-line-parser';
+
 export interface DashboardTodoItem {
 	text: string;
 	path: string;
 	line: number;
+	metadata?: Pick<TasksLine, 'priority' | 'tags' | 'scheduledDate' | 'startDate' | 'dueDate' | 'createdDate' | 'doneDate' | 'id' | 'custom'>;
 }
 
 function normalizePath(path: string): string {
@@ -22,8 +25,14 @@ export function isTodoPathInScope(path: string, rootPaths: readonly string[], ex
 
 export function extractIncompleteTodos(markdown: string, path: string): DashboardTodoItem[] {
 	return markdown.split(/\r?\n/u).flatMap((line, index) => {
-		const match = /^\s*[-*+]\s+\[\s\]\s+(.+?)\s*$/u.exec(line);
-		return match ? [{ text: match[1]!, path, line: index + 1 }] : [];
+		const task = parseTasksLine(line);
+		if (!task || task.completed || task.status !== ' ') return [];
+		const { priority, tags, scheduledDate, startDate, dueDate, createdDate, doneDate, id, custom } = task;
+		const hasMetadata = priority !== 'normal' || tags.length > 0 || Boolean(scheduledDate || startDate || dueDate || createdDate || doneDate || id) || Object.keys(custom ?? {}).length > 0;
+		return [{
+			text: task.title, path, line: index + 1,
+			...(hasMetadata ? { metadata: { priority, tags, scheduledDate, startDate, dueDate, createdDate, doneDate, id, custom } } : {}),
+		}];
 	});
 }
 
@@ -44,8 +53,16 @@ export function setMarkdownTodoCompleted(markdown: string, lineNumber: number, c
 	const index = lineNumber - 1;
 	if (index < 0 || index >= lines.length) throw new Error('待办所在行不存在，笔记可能已被修改。');
 	const line = lines[index]!;
-	if (!/^\s*[-*+]\s+\[[ xX]\]/u.test(line)) throw new Error('待办所在行不再是 Markdown 任务。');
-	lines[index] = line.replace(/^(\s*[-*+]\s+)\[[ xX]\]/u, `$1[${completed ? 'x' : ' '}]`);
+	const ending = line.match(/(\r\n|\n|\r)$/u)?.[0] ?? '';
+	const source = line.replace(/\r?\n|\r$/u, '');
+	const parsed = parseTasksLine(source);
+	if (!parsed) throw new Error('待办所在行不再是 Markdown 任务。');
+	try {
+		lines[index] = parsed.priority !== 'normal' || parsed.tags.length > 0 || parsed.scheduledDate || parsed.startDate || parsed.dueDate || parsed.createdDate || parsed.doneDate || parsed.id || Object.keys(parsed.custom ?? {}).length > 0
+			? `${updateTasksLineCompletion(source, completed, new Date().toISOString().slice(0, 10))}${ending}`
+			: `${source.replace(/^(\s*[-*+]\s+)\[[ xX]\]/u, `$1[${completed ? 'x' : ' '}]`)}${ending}`;
+	}
+	catch { throw new Error('待办所在行不再是 Markdown 任务。'); }
 	return lines.join('');
 }
 
@@ -56,9 +73,11 @@ export function setMarkdownTodoText(markdown: string, lineNumber: number, expect
 	const index = lineNumber - 1;
 	if (index < 0 || index >= lines.length) throw new Error('待办所在行不存在，笔记可能已被修改。');
 	const line = lines[index]!;
-	const match = /^(\s*[-*+]\s+\[[ xX]\]\s+)(.*?)(\s*)(\r\n|\n|\r|$)$/u.exec(line);
-	if (!match) throw new Error('待办所在行不再是 Markdown 任务。');
-	if (match[2] !== expectedText) throw new Error('待办内容已被修改，请刷新后重试。');
-	lines[index] = `${match[1]}${replacement}${match[3]}${match[4]}`;
+	const ending = line.match(/(\r\n|\n|\r)$/u)?.[0] ?? '';
+	const source = line.replace(/\r?\n|\r$/u, '');
+	const parsed = parseTasksLine(source);
+	if (!parsed) throw new Error('待办所在行不再是 Markdown 任务。');
+	if (parsed.title !== expectedText) throw new Error('待办内容已被修改，请刷新后重试。');
+	lines[index] = `${updateTasksLineTitle(source, replacement)}${ending}`;
 	return lines.join('');
 }

@@ -9,6 +9,10 @@ function ruleFor(selector: string): string {
 }
 
 describe('task card layout', () => {
+	it('keeps dashboard heading labels independent from configurable body text size', () => {
+		expect(css).toMatch(/\.op-dashboard-card \.op-dashboard-card-heading[^{]*\{[^}]*font-size:\s*var\(--font-ui-small\)[^}]*!important/u);
+		expect(ruleFor('.op-dashboard-card')).toMatch(/font-size:\s*var\(--op-dashboard-card-font-size\)/u);
+	});
 	it('renders four-quadrant tasks as cards instead of tables', () => {
 		expect(css).toContain('.op-quadrant-card');
 		expect(css).toContain('.op-quadrant-card-list');
@@ -28,7 +32,7 @@ describe('task card layout', () => {
 			expect(rule).toMatch(/align-items:\s*stretch/u);
 			expect(rule).toMatch(/align-content:\s*start/u);
 			if (selector === '.op-task-card') expect(rule).toMatch(/grid-template-rows:\s*repeat\(3,\s*auto\)/u);
-			expect(rule).toMatch(/overflow:\s*hidden/u);
+			expect(rule).toMatch(selector === '.op-board-card' ? /overflow:\s*visible/u : /overflow:\s*hidden/u);
 			expect(rule).toMatch(/white-space:\s*normal/u);
 		},
 	);
@@ -44,7 +48,7 @@ describe('task card layout', () => {
 	});
 
 	it('keeps list horizontal scrolling visible inside constrained project surfaces', () => {
-		const source = readFileSync(new URL('../../src/views/project-view.ts', import.meta.url), 'utf8');
+		const source = readFileSync(new URL('../../src/views/project-list-renderer.ts', import.meta.url), 'utf8');
 		expect(ruleFor('.op-project-content')).toMatch(/min-width:\s*0/u);
 		expect(ruleFor('.op-mode-surface')).toMatch(/min-width:\s*0/u);
 		expect(ruleFor('.op-list-scroll')).toMatch(/grid-template-rows:\s*minmax\(0,\s*1fr\)\s+auto/u);
@@ -68,5 +72,30 @@ describe('task card layout', () => {
 		expect(helper).toContain("toggleClass('is-checked'");
 		expect(css).toMatch(/\.op-card-markdown \.task-list-item\.is-checked \.op-task-list-content\s*\{[^}]*text-decoration:\s*line-through/u);
 		expect(css).toMatch(/\.op-task-checkbox-marker\s*\{[^}]*position:\s*absolute/u);
+	});
+
+	it('keeps project cards and embedded task controls shadowless and left aligned', () => {
+		for (const selector of ['.op-task-card', '.op-board-card', '.op-calendar-task', '.op-quadrant-card']) {
+			expect(ruleFor(selector)).toMatch(/box-shadow:\s*none/u);
+		}
+		expect(ruleFor('.op-embedded-subtask-content')).toMatch(/justify-content:\s*stretch/u);
+		expect(ruleFor('.op-embedded-subtask-content')).toMatch(/justify-items:\s*start/u);
+		expect(ruleFor('.op-embedded-subtask-content')).toMatch(/box-shadow:\s*none/u);
+	});
+
+	it('lets calendar cards use their own content height within a shared lane', () => {
+		const rule = ruleFor('.op-calendar-task');
+		expect(rule).toMatch(/height:\s*auto/u);
+		expect(rule).toMatch(/overflow:\s*visible/u);
+		expect(rule).toMatch(/align-self:\s*start/u);
+	});
+
+	it('contains embedded task metadata on a separate transparent responsive line', () => {
+		expect(ruleFor('.op-embedded-subtask')).toMatch(/min-width:\s*0/u);
+		expect(ruleFor('.op-embedded-subtask')).toMatch(/max-width:\s*100%/u);
+		expect(ruleFor('.op-embedded-subtask-content')).toMatch(/display:\s*grid/u);
+		expect(ruleFor('.op-embedded-subtask-content')).toMatch(/background:\s*transparent\s*!important/u);
+		expect(ruleFor('.op-embedded-subtask .op-task-metadata')).toMatch(/grid-row:\s*2/u);
+		expect(ruleFor('.op-embedded-subtask .op-task-metadata')).toMatch(/flex-wrap:\s*wrap/u);
 	});
 });

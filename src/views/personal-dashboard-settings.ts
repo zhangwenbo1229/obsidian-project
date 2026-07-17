@@ -1,9 +1,12 @@
 import type { DashboardCardKind } from '../domain/types';
+import { normalizeCheckInHistories, type CheckInHistories } from './dashboard-modules/check-in-model';
 
 export interface PersonalDashboardSettings {
 	enabledCardKinds: DashboardCardKind[];
+	openPersonalDashboardOnStartup: boolean;
 	weatherCredentials: PersonalDashboardWeatherCredentials;
 	fileOpenCounts: Record<string, number>;
+	checkInHistories: CheckInHistories;
 }
 
 export interface PersonalDashboardWeatherCredentials {
@@ -27,7 +30,10 @@ export const ALL_DASHBOARD_CARD_KINDS: DashboardCardKind[] = [
 	'text',
 	'chart',
 	'countdown',
+	'progress',
+	'check-in',
 	'heatmap',
+	'iframe',
 ];
 
 function normalizedHttpsOrigin(value: unknown): string {
@@ -50,6 +56,7 @@ export function normalizePersonalDashboardSettings(value?: unknown): PersonalDas
 		? source.fileOpenCounts as Record<string, unknown>
 		: {};
 	return {
+		openPersonalDashboardOnStartup: source.openPersonalDashboardOnStartup === true,
 		enabledCardKinds: Array.isArray(source.enabledCardKinds)
 			? [...new Set(source.enabledCardKinds.filter((kind): kind is DashboardCardKind =>
 				typeof kind === 'string' && supported.has(kind as DashboardCardKind),
@@ -67,5 +74,6 @@ export function normalizePersonalDashboardSettings(value?: unknown): PersonalDas
 			if (!normalizedPath || typeof count !== 'number' || !Number.isFinite(count) || count <= 0) return [];
 			return [[normalizedPath, Math.min(1_000_000, Math.floor(count))]];
 		})),
+		checkInHistories: normalizeCheckInHistories(source.checkInHistories),
 	};
 }

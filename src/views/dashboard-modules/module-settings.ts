@@ -11,7 +11,10 @@ import type {
 	DateDashboardModuleConfig,
 	TodoDashboardModuleConfig,
 	CountdownDashboardModuleConfig,
+	CheckInDashboardModuleConfig,
 	HeatmapDashboardModuleConfig,
+	IframeDashboardModuleConfig,
+	TimeProgressDashboardModuleConfig,
 } from '../../domain/types';
 import type { DashboardModuleSettingsContext } from './types';
 import { parseChartCsv, serializeChartData, type ChartData } from './chart-model';
@@ -87,6 +90,29 @@ export function renderCalendarSettings(context: DashboardModuleSettingsContext):
 	new Setting(context.container).setName('显示节假日').addToggle((toggle) => toggle
 		.setValue(config.showHolidays)
 		.onChange((showHolidays) => update({ showHolidays })));
+	new Setting(context.container).setName('使用打卡数据').setDesc('在对应日期显示当天的打卡次数。').addToggle((toggle) => toggle
+		.setValue(config.useCheckInData).onChange((useCheckInData) => update({ useCheckInData })));
+	if (config.useCheckInData) {
+		renderCheckInSourceSetting(context, config.checkInCardId, (checkInCardId) => update({ checkInCardId }));
+		new Setting(context.container).setName('打卡数据颜色').addColorPicker((picker) => picker
+			.setValue(config.checkInColor).onChange((checkInColor) => update({ checkInColor })));
+		new Setting(context.container).setName('打卡数据图标').setDesc('支持图标名称或 emoji。').addText((text) => text
+			.setPlaceholder('输入图标名称').setValue(config.checkInIcon)
+			.onChange((checkInIcon) => update({ checkInIcon: checkInIcon.trim() || 'badge-check' })));
+	}
+}
+
+function renderCheckInSourceSetting(
+	context: DashboardModuleSettingsContext,
+	value: string | null,
+	update: (cardId: string | null) => void,
+): void {
+	const cards = context.manager.personalDashboardLayout.filter((card) => card.kind === 'check-in');
+	new Setting(context.container).setName('绑定打卡卡片').addDropdown((dropdown) => {
+		dropdown.addOption('', '请选择打卡卡片');
+		for (const card of cards) dropdown.addOption(card.id, card.title ?? `打卡卡片 ${card.order + 1}`);
+		dropdown.setValue(value ?? '').onChange((cardId) => update(cardId || null));
+	});
 }
 
 function pathListSetting(container: HTMLElement, name: string, description: string, value: string[], update: (paths: string[]) => void): void {
@@ -117,21 +143,42 @@ export function renderTodoSettings(context: DashboardModuleSettingsContext): voi
 	pathListSetting(context.container, '排除目录', '目录及其子目录均会排除。', config.excludePaths, (excludePaths) => update({ excludePaths }));
 	new Setting(context.container).setName('显示数量').addSlider((slider) => slider.setLimits(1, 100, 1).setDynamicTooltip()
 		.setValue(config.limit).onChange((limit) => update({ limit })));
-	new Setting(context.container).setName('显示来源').addToggle((toggle) => toggle.setValue(config.showSource)
-		.onChange((showSource) => update({ showSource })));
+	new Setting(context.container).setName('显示任务元数据').setDesc('显示优先级、日期和标签；颜色与图标由“设置 → 任务元数据”控制。')
+		.addToggle((toggle) => toggle.setValue(config.showMetadata).onChange((showMetadata) => update({ showMetadata })));
 }
 
 export function renderCountdownSettings(context: DashboardModuleSettingsContext): void {
 	let config = context.config as CountdownDashboardModuleConfig;
 	const update = (patch: Partial<CountdownDashboardModuleConfig>) => { config = { ...config, ...patch }; context.update(config); };
-	section(context.container, '倒计日', '按照本地自然日计算，不受当前时间和时区偏移影响。');
+	section(context.container, '计时', '按本地自然日计算，可倒计未来日期或正计过去日期。');
+	new Setting(context.container).setName('计时方式').addDropdown((dropdown) => dropdown
+		.addOption('countdown', '倒计时')
+		.addOption('countup', '正计时')
+		.setValue(config.mode)
+		.onChange((mode) => update({ mode: mode === 'countup' ? 'countup' : 'countdown' })));
 	new Setting(context.container).setName('事件名称').addText((text) => text.setValue(config.eventName).onChange((eventName) => update({ eventName })));
-	new Setting(context.container).setName('目标日期').addText((text) => {
+	new Setting(context.container).setName(config.mode === 'countup' ? '开始日期' : '目标日期').addText((text) => {
 		text.inputEl.type = 'date';
 		text.setValue(config.targetDate).onChange((targetDate) => update({ targetDate }));
 	});
 	new Setting(context.container).setName('包含今天').addToggle((toggle) => toggle.setValue(config.includeToday).onChange((includeToday) => update({ includeToday })));
-	new Setting(context.container).setName('显示目标日期').addToggle((toggle) => toggle.setValue(config.showTargetDate).onChange((showTargetDate) => update({ showTargetDate })));
+	new Setting(context.container).setName(config.mode === 'countup' ? '显示开始日期' : '显示目标日期').addToggle((toggle) => toggle.setValue(config.showTargetDate).onChange((showTargetDate) => update({ showTargetDate })));
+}
+
+export function renderTimeProgressSettings(context: DashboardModuleSettingsContext): void {
+	let config = context.config as TimeProgressDashboardModuleConfig;
+	const update = (patch: Partial<TimeProgressDashboardModuleConfig>) => { config = { ...config, ...patch }; context.update(config); };
+	section(context.container, '时间进度', '根据当前本地时间计算本周、本月和本年的已用进度。');
+	new Setting(context.container).setName('显示本周').addToggle((toggle) => toggle
+		.setValue(config.showWeek).onChange((showWeek) => update({ showWeek })));
+	new Setting(context.container).setName('显示本月').addToggle((toggle) => toggle
+		.setValue(config.showMonth).onChange((showMonth) => update({ showMonth })));
+	new Setting(context.container).setName('显示本年').addToggle((toggle) => toggle
+		.setValue(config.showYear).onChange((showYear) => update({ showYear })));
+	new Setting(context.container).setName('进度颜色').addColorPicker((picker) => picker
+		.setValue(config.fillColor).onChange((fillColor) => update({ fillColor })));
+	new Setting(context.container).setName('轨道颜色').addColorPicker((picker) => picker
+		.setValue(config.trackColor).onChange((trackColor) => update({ trackColor })));
 }
 
 export function renderHeatmapSettings(context: DashboardModuleSettingsContext): void {
@@ -144,6 +191,28 @@ export function renderHeatmapSettings(context: DashboardModuleSettingsContext): 
 		.addOption('90', '最近 90 天').addOption('180', '最近 180 天').addOption('365', '最近 365 天')
 		.setValue(String(config.days)).onChange((days) => update({ days: Number(days) })));
 	new Setting(context.container).setName('热力颜色').addColorPicker((picker) => picker.setValue(config.color).onChange((color) => update({ color })));
+	new Setting(context.container).setName('使用打卡数据').setDesc('开启后使用每天的打卡次数，不再统计文件最后修改日期。').addToggle((toggle) => toggle
+		.setValue(config.useCheckInData).onChange((useCheckInData) => update({ useCheckInData })));
+	if (config.useCheckInData) renderCheckInSourceSetting(context, config.checkInCardId, (checkInCardId) => update({ checkInCardId }));
+}
+
+export function renderCheckInSettings(context: DashboardModuleSettingsContext): void {
+	let config = context.config as CheckInDashboardModuleConfig;
+	const update = (patch: Partial<CheckInDashboardModuleConfig>) => { config = { ...config, ...patch }; context.update(config); };
+	section(context.container, '每日打卡', '数据仅保存在当前库的插件配置中，可供日历与热力图复用。');
+	new Setting(context.container).setName('每日目标次数').addSlider((slider) => slider
+		.setLimits(1, 20, 1).setDynamicTooltip().setValue(config.dailyTarget).onChange((dailyTarget) => update({ dailyTarget })));
+	new Setting(context.container).setName('按钮文字').addText((text) => text
+		.setValue(config.buttonLabel).onChange((buttonLabel) => update({ buttonLabel })));
+	new Setting(context.container).setName('显示连续天数').addToggle((toggle) => toggle
+		.setValue(config.showStreak).onChange((showStreak) => update({ showStreak })));
+	new Setting(context.container).setName('显示累计天数').addToggle((toggle) => toggle
+		.setValue(config.showTotalDays).onChange((showTotalDays) => update({ showTotalDays })));
+	new Setting(context.container).setName('进度样式').addDropdown((dropdown) => dropdown
+		.addOption('linear', '直线')
+		.addOption('semicircle', '半圆')
+		.setValue(config.progressStyle)
+		.onChange((progressStyle) => update({ progressStyle: progressStyle === 'semicircle' ? 'semicircle' : 'linear' })));
 }
 
 export function renderNoteStatsSettings(context: DashboardModuleSettingsContext): void {
@@ -368,6 +437,22 @@ export function renderTextSettings(context: DashboardModuleSettingsContext): voi
 		void renderPreview();
 	});
 	void renderPreview();
+}
+
+export function renderIframeSettings(context: DashboardModuleSettingsContext): void {
+	let config = context.config as IframeDashboardModuleConfig;
+	const update = (url: string) => {
+		config = { ...config, url };
+		context.update(config);
+	};
+	section(context.container, '网页内容', '输入需要嵌入卡片的完整 HTTP 或 HTTPS 地址。目标网站可以通过自身安全策略拒绝嵌入。');
+	new Setting(context.container)
+		.setName('网页地址')
+		.setDesc('仅当前卡片加载该地址；插件不会读取或上传 vault 内容。')
+		.addText((text) => {
+			text.inputEl.type = 'url';
+			text.setPlaceholder('输入 HTTPS 地址').setValue(config.url).onChange(update);
+		});
 }
 
 function fallbackChartData(): ChartData {

@@ -12,7 +12,10 @@ import type {
 	DateDashboardModuleConfig,
 	TodoDashboardModuleConfig,
 	CountdownDashboardModuleConfig,
+	CheckInDashboardModuleConfig,
 	HeatmapDashboardModuleConfig,
+	IframeDashboardModuleConfig,
+	TimeProgressDashboardModuleConfig,
 } from '../../domain/types';
 
 const WEATHER_PROVIDERS = new Set(['open-meteo', 'qweather', 'openweathermap']);
@@ -34,8 +37,11 @@ export const DASHBOARD_MODULE_CATALOG: Array<{
 	{ kind: 'directory', label: '目录', icon: 'folder-tree', defaultSize: { columns: 2, rows: 3 } },
 	{ kind: 'text', label: '文本', icon: 'notebook-pen', defaultSize: { columns: 2, rows: 2 } },
 	{ kind: 'chart', label: '图表', icon: 'chart-column', defaultSize: { columns: 2, rows: 3 } },
-	{ kind: 'countdown', label: '倒计日', icon: 'hourglass', defaultSize: { columns: 1, rows: 2 } },
-	{ kind: 'heatmap', label: '热力图', icon: 'grid-3x3', defaultSize: { columns: 3, rows: 2 } },
+	{ kind: 'countdown', label: '计时', icon: 'hourglass', defaultSize: { columns: 1, rows: 2 } },
+	{ kind: 'progress', label: '进度', icon: 'chart-no-axes-gantt', defaultSize: { columns: 2, rows: 2 } },
+	{ kind: 'check-in', label: '打卡', icon: 'badge-check', defaultSize: { columns: 2, rows: 2 } },
+	{ kind: 'heatmap', label: '热力图', icon: 'layout-grid', defaultSize: { columns: 3, rows: 2 } },
+	{ kind: 'iframe', label: '网页', icon: 'panels-top-left', defaultSize: { columns: 3, rows: 3 } },
 ];
 
 export function isDashboardModuleKind(value: string): value is DashboardModuleKind {
@@ -83,6 +89,16 @@ function normalizedFeedUrls(value: unknown): string[] {
 	});
 }
 
+function normalizedWebUrl(value: unknown): string {
+	if (typeof value !== 'string' || !value.trim()) return '';
+	try {
+		const url = new URL(value.trim());
+		return url.protocol === 'https:' || url.protocol === 'http:' ? url.toString() : '';
+	} catch {
+		return '';
+	}
+}
+
 export function normalizeDashboardModuleConfig(kind: DashboardModuleKind, value: unknown): DashboardModuleConfig {
 	const source = objectValue(value);
 	if (kind === 'weather') return {
@@ -100,6 +116,10 @@ export function normalizeDashboardModuleConfig(kind: DashboardModuleKind, value:
 		showLunar: source.showLunar !== false,
 		showHolidays: source.showHolidays !== false,
 		weekStartsOn: source.weekStartsOn === 0 ? 0 : 1,
+		useCheckInData: source.useCheckInData === true,
+		checkInCardId: typeof source.checkInCardId === 'string' && source.checkInCardId.trim() ? source.checkInCardId.trim() : null,
+		checkInColor: normalizedColor(source.checkInColor, '#22a06b'),
+		checkInIcon: typeof source.checkInIcon === 'string' && source.checkInIcon.trim() ? source.checkInIcon.trim() : 'badge-check',
 	} satisfies CalendarDashboardModuleConfig;
 	if (kind === 'date') return {
 		showLunar: source.showLunar !== false,
@@ -113,6 +133,7 @@ export function normalizeDashboardModuleConfig(kind: DashboardModuleKind, value:
 		excludePaths: normalizedDirectoryPaths(source.excludePaths),
 		limit: boundedNumber(source.limit, 30, 1, 100),
 		showSource: source.showSource !== false,
+		showMetadata: source.showMetadata !== false,
 	} satisfies TodoDashboardModuleConfig;
 	if (kind === 'note-stats') return {
 		rootPath: typeof source.rootPath === 'string' ? source.rootPath.trim().replace(/^\/+|\/+$/gu, '') : '',
@@ -160,7 +181,11 @@ export function normalizeDashboardModuleConfig(kind: DashboardModuleKind, value:
 	if (kind === 'text') return {
 		markdown: typeof source.markdown === 'string' ? source.markdown : '## 文本卡片\n\n在设置中输入 Markdown 内容。',
 	} satisfies TextDashboardModuleConfig;
+	if (kind === 'iframe') return {
+		url: normalizedWebUrl(source.url),
+	} satisfies IframeDashboardModuleConfig;
 	if (kind === 'countdown') return {
+		mode: source.mode === 'countup' ? 'countup' : 'countdown',
 		targetDate: typeof source.targetDate === 'string' && /^\d{4}-\d{2}-\d{2}$/u.test(source.targetDate)
 			? source.targetDate
 			: '',
@@ -168,11 +193,27 @@ export function normalizeDashboardModuleConfig(kind: DashboardModuleKind, value:
 		includeToday: source.includeToday === true,
 		showTargetDate: source.showTargetDate !== false,
 	} satisfies CountdownDashboardModuleConfig;
+	if (kind === 'progress') return {
+		showWeek: source.showWeek !== false,
+		showMonth: source.showMonth !== false,
+		showYear: source.showYear !== false,
+		fillColor: normalizedColor(source.fillColor, '#ffab00'),
+		trackColor: normalizedColor(source.trackColor, '#b3dce8'),
+	} satisfies TimeProgressDashboardModuleConfig;
+	if (kind === 'check-in') return {
+		dailyTarget: boundedNumber(source.dailyTarget, 1, 1, 20),
+		buttonLabel: typeof source.buttonLabel === 'string' && source.buttonLabel.trim() ? source.buttonLabel.trim() : '立即打卡',
+		showStreak: source.showStreak !== false,
+		showTotalDays: source.showTotalDays !== false,
+		progressStyle: source.progressStyle === 'semicircle' ? 'semicircle' : 'linear',
+	} satisfies CheckInDashboardModuleConfig;
 	if (kind === 'heatmap') return {
 		rootPaths: normalizedDirectoryPaths(source.rootPaths),
 		excludePaths: normalizedDirectoryPaths(source.excludePaths),
 		days: source.days === 90 || source.days === 180 ? source.days : 365,
 		color: normalizedColor(source.color, '#22a06b'),
+		useCheckInData: source.useCheckInData === true,
+		checkInCardId: typeof source.checkInCardId === 'string' && source.checkInCardId.trim() ? source.checkInCardId.trim() : null,
 	} satisfies HeatmapDashboardModuleConfig;
 	return {
 		chartType: source.chartType === 'bar' || source.chartType === 'pie' ? source.chartType : 'line',

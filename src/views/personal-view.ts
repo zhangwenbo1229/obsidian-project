@@ -113,6 +113,7 @@ export class PersonalView extends ItemView {
 			cardEl.addEventListener('dragstart', (event) => event.dataTransfer?.setData('text/plain', card.id));
 			cardEl.addEventListener('contextmenu', (event) => this.openFilterMenu(event, card));
 			this.attachResizeHandle(cardEl, card, workspace);
+			if (card.kind === 'iframe') this.attachIframeDragHandle(cardEl, card);
 			this.renderDashboardCard(cardEl, card, tasks, today, generation);
 		}
 	}
@@ -181,20 +182,30 @@ export class PersonalView extends ItemView {
 		const text = card.kind === 'percentage' ? `${Math.round(rawValue * 100)}%` : String(rawValue);
 		if (card.kind === 'percentage' && card.percentageDisplay === 'progress') {
 			const clampedPercentage = Math.min(100, Math.max(0, Math.round(rawValue * 100)));
-			const progress = cardEl.createDiv({ cls: 'op-dashboard-progress' });
-			const progressValue = progress.createDiv({ cls: 'op-dashboard-progress-value', text });
-			if (card.numberColor) progressValue.style.color = card.numberColor;
-			const track = progress.createDiv({
-				cls: 'op-dashboard-progress-track',
-				attr: {
-					role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100',
-					'aria-valuenow': String(clampedPercentage),
-				},
-			});
-			track.createSpan({
-				cls: 'op-dashboard-progress-fill',
-				attr: { style: `--op-progress: ${clampedPercentage / 100}` },
-			});
+			const progress = cardEl.createDiv({ cls: `op-dashboard-progress is-${card.percentageProgressStyle}` });
+			if (card.percentageProgressStyle === 'semicircle') {
+				const gauge = progress.createDiv({
+					cls: 'op-semicircle-gauge',
+					attr: {
+						role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100',
+						'aria-valuenow': String(clampedPercentage), style: `--op-progress: ${clampedPercentage / 100}`,
+					},
+				});
+				gauge.createSpan({ cls: 'op-semicircle-gauge-track' });
+				const gaugeValue = gauge.createEl('strong', { text });
+				if (card.numberColor) gaugeValue.style.color = card.numberColor;
+			} else {
+				const progressValue = progress.createDiv({ cls: 'op-dashboard-progress-value', text });
+				if (card.numberColor) progressValue.style.color = card.numberColor;
+				const track = progress.createDiv({
+					cls: 'op-dashboard-progress-track',
+					attr: {
+						role: 'progressbar', 'aria-valuemin': '0', 'aria-valuemax': '100',
+						'aria-valuenow': String(clampedPercentage),
+					},
+				});
+				track.createSpan({ cls: 'op-dashboard-progress-fill', attr: { style: `--op-progress: ${clampedPercentage / 100}` } });
+			}
 			return;
 		}
 		const body = cardEl.createDiv({ cls: 'op-dashboard-stat-body' });
@@ -233,7 +244,7 @@ export class PersonalView extends ItemView {
 		};
 		addCard('number', '新增数字卡片', 'hash');
 		addCard('percentage', '新增百分比卡片', 'percent');
-		addCard('task-list', '新增任务列表卡片', 'list-checks');
+		addCard('task-list', '新增项目卡片', 'list-checks');
 		for (const definition of DASHBOARD_MODULE_DEFINITIONS) {
 			addCard(definition.kind, `新增${definition.label}卡片`, definition.icon);
 		}
@@ -293,6 +304,7 @@ export class PersonalView extends ItemView {
 			cls: 'op-dashboard-resize-handle',
 			attr: { 'aria-label': '调整卡片大小', title: '调整卡片大小', type: 'button' },
 		});
+		setIcon(handle, 'move-diagonal-2');
 		handle.draggable = false;
 		handle.addEventListener('pointerdown', (event) => {
 			event.preventDefault();
@@ -336,6 +348,19 @@ export class PersonalView extends ItemView {
 		});
 	}
 
+	private attachIframeDragHandle(cardEl: HTMLElement, card: PersonalDashboardCardLayout): void {
+		const dragHandle = cardEl.createEl('button', {
+			cls: 'op-dashboard-drag-handle',
+			attr: { 'aria-label': '拖拽网页卡片', title: '拖拽网页卡片', type: 'button' },
+		});
+		setIcon(dragHandle, 'grip-horizontal');
+		dragHandle.draggable = true;
+		dragHandle.addEventListener('dragstart', (event) => {
+			event.dataTransfer?.setData('text/plain', card.id);
+			if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+		});
+	}
+
 	private renderTasks(container: HTMLElement, tasks: IndexedTask[], displayFields: readonly TaskDisplayField[]): void {
 		if (tasks.length === 0) {
 			container.createDiv({ cls: 'op-empty-state', text: '这里暂时没有任务' });
@@ -343,7 +368,9 @@ export class PersonalView extends ItemView {
 		}
 		for (const task of tasks) {
 			const row = container.createDiv({ cls: 'op-task-card', attr: { role: 'button', tabindex: '0', 'aria-label': task.document.metadata.title } });
-			renderTaskCardFields(row, task, this.manager, displayFields, { titleClassName: 'op-task-card-title', component: this });
+			renderTaskCardFields(row, task, this.manager, displayFields, {
+				titleClassName: 'op-task-card-title', component: this, markerBeforeKey: true,
+			});
 			bindTaskCardActivation(row, () => new EditTaskModal(this.manager, task).open());
 		}
 	}

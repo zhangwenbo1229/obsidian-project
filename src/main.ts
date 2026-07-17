@@ -4,8 +4,13 @@ import { ProjectManager } from './services/project-manager';
 import { ObsidianProjectSettingTab } from './settings/settings-tab';
 import { PERSONAL_VIEW_TYPE, PersonalView } from './views/personal-view';
 import { PROJECT_VIEW_TYPE, ProjectView } from './views/project-view';
+import { TASK_VIEW_TYPE, TaskView } from './views/task-view';
 import type { ConfigurationSnapshot } from './settings/configuration-store';
 import { registerBuiltinTagEditor } from './integrations/builtin-tag-editor';
+import { registerBuiltinPropertyEditor } from './integrations/builtin-property-editor';
+import { PropertyStyleModal } from './modals/property-style-modal';
+import { PropertyGroupModal } from './modals/property-group-modal';
+import { decorateMarkdownReferencesWhenReady } from './integrations/markdown-reference-renderer';
 
 interface PluginData {
 	legacyGlobalConfigPath: string;
@@ -28,15 +33,51 @@ export default class ObsidianProjectPlugin extends Plugin {
 				await this.savePluginSettings();
 			},
 		}, this.settings.legacyGlobalConfigPath);
-		await this.manager.initialize();
+		await this.manager.initializeConfiguration();
 		this.registerView(PERSONAL_VIEW_TYPE, (leaf) => new PersonalView(leaf, this.manager));
 		this.registerView(PROJECT_VIEW_TYPE, (leaf) => new ProjectView(leaf, this.manager));
+		this.registerView(TASK_VIEW_TYPE, (leaf) => new TaskView(leaf, this.manager));
 		registerCommands(this);
 		registerBuiltinTagEditor(this, this.manager);
+		registerBuiltinPropertyEditor(
+			this,
+			() => this.manager.nativeSidebarSettings,
+			(key) => new PropertyStyleModal(this.manager, key).open(),
+			(groupId) => new PropertyGroupModal(this.manager, this.manager.nativeSidebarSettings.propertyGroups.find((group) => group.id === groupId)).open(),
+			(groupId) => void this.manager.deletePropertyGroup(groupId),
+		);
+		const taskIndexReady = this.manager.initializeTaskIndex().catch((error) => {
+			new Notice(error instanceof Error ? error.message : String(error));
+		});
+		this.registerMarkdownPostProcessor((element) => decorateMarkdownReferencesWhenReady(
+			element,
+			taskIndexReady,
+			() => this.manager.index.validTasks().map((task) => ({
+				key: task.document.metadata.key,
+				title: task.document.metadata.title,
+				icon: task.project.taskTypes.find((type) => type.id === task.document.metadata.taskTypeId)?.marker,
+				color: task.project.taskTypes.find((type) => type.id === task.document.metadata.taskTypeId)?.titleColor,
+			})),
+			() => this.manager.globalConfig.people.map((person) => {
+				const presentation = this.manager.globalConfig.personNamePresentation;
+				return {
+					name: person.name,
+					sourcePath: person.sourcePath,
+					title: presentation?.title ? `${presentation.title}：${person.name}` : person.name,
+					icon: presentation?.icon,
+					color: presentation?.color,
+				};
+			}),
+		));
 		this.addSettingTab(new ObsidianProjectSettingTab(this.app, this));
 		this.addRibbonIcon('layout-dashboard', '打开个人仪表盘', () => void this.activatePersonalView());
 		this.addRibbonIcon('panels-top-left', '打开项目视图', () => void this.activateProjectView());
-
+		this.addRibbonIcon('list-checks', '打开任务视图', () => void this.activateTaskView());
+		this.app.workspace.onLayoutReady(() => {
+			if (this.manager.personalDashboardSettings.openPersonalDashboardOnStartup) {
+				void this.activatePersonalView();
+			}
+		});
 		let refreshTimer: number | undefined;
 		const changedPaths = new Set<string>();
 		const scheduleRefresh = (...paths: string[]) => {
@@ -45,7 +86,7 @@ export default class ObsidianProjectPlugin extends Plugin {
 			refreshTimer = window.setTimeout(() => {
 				const pending = [...changedPaths];
 				changedPaths.clear();
-				void this.manager.refreshPaths(pending).catch((error) => {
+				void this.manager.initializeTaskIndex().then(() => this.manager.refreshPaths(pending)).catch((error) => {
 					new Notice(error instanceof Error ? error.message : String(error));
 				});
 			}, 150);
@@ -68,6 +109,10 @@ export default class ObsidianProjectPlugin extends Plugin {
 
 	async activateProjectView(): Promise<void> {
 		await this.activateView(PROJECT_VIEW_TYPE);
+	}
+
+	async activateTaskView(): Promise<void> {
+		await this.activateView(TASK_VIEW_TYPE);
 	}
 
 	async saveGlobalConfig(): Promise<void> {

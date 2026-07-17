@@ -1,9 +1,10 @@
-import { Notice, setIcon } from 'obsidian';
+import { Notice } from 'obsidian';
 import type { TodoDashboardModuleConfig } from '../../domain/types';
 import { createModuleBody, renderModuleMessage } from './card-ui';
 import { collectIncompleteTodos, isTodoPathInScope, setMarkdownTodoCompleted, setMarkdownTodoText } from './todo-model';
 import { renderTodoSettings } from './module-settings';
 import type { DashboardModuleDefinition, DashboardModuleRenderContext } from './types';
+import { renderTaskMetadata } from '../task-metadata-presentation';
 
 async function renderTodo(context: DashboardModuleRenderContext): Promise<void> {
 	const config = context.card.moduleConfig as TodoDashboardModuleConfig;
@@ -22,27 +23,22 @@ async function renderTodo(context: DashboardModuleRenderContext): Promise<void> 
 	const list = body.createDiv({ cls: 'op-todo-list' });
 	for (const todo of todos) {
 		const file = sources.find((source) => source.path === todo.path)?.file;
-		const row = list.createDiv({ cls: 'op-todo-item', attr: { title: `${todo.path}:${todo.line}` } });
+		const row = list.createDiv({ cls: 'op-todo-item' });
 		const checkbox = row.createEl('input', { cls: 'op-todo-checkbox', attr: { type: 'checkbox', 'aria-label': `完成待办：${todo.text}` } });
 		const content = row.createDiv({ cls: 'op-todo-content' });
 		const text = content.createEl('button', { cls: 'op-todo-text', attr: { type: 'button', title: '双击编辑待办内容' } });
 		text.createSpan({ text: todo.text });
+		if (config.showMetadata && todo.metadata) renderTaskMetadata(content, todo.metadata, context.manager, 'taskView');
 		if (file) {
-			if (config.showSource) {
-				const source = content.createEl('button', {
-					cls: 'op-todo-source',
-					attr: { type: 'button', 'aria-label': `打开来源 ${todo.path} 第 ${todo.line} 行`, title: '打开来源文件' },
-				});
-				const icon = source.createSpan({ cls: 'op-todo-source-icon' });
-				setIcon(icon, 'external-link');
-				source.createSpan({ text: `${todo.path} · 第 ${todo.line} 行` });
-				source.addEventListener('click', () => void context.manager.app.workspace.getLeaf(false).openFile(file));
-			}
 			text.addEventListener('dblclick', (event) => {
 				event.preventDefault();
 				event.stopPropagation();
-				content.hidden = true;
-				const input = row.createEl('input', { cls: 'op-todo-inline-editor', attr: { type: 'text', 'aria-label': '编辑待办内容' } });
+				text.hidden = true;
+				const input = text.ownerDocument.createElement('input');
+				input.className = 'op-todo-inline-editor';
+				input.type = 'text';
+				input.setAttribute('aria-label', '编辑待办内容');
+				text.insertAdjacentElement('afterend', input);
 				input.value = todo.text;
 				input.focus();
 				input.select();
@@ -51,7 +47,7 @@ async function renderTodo(context: DashboardModuleRenderContext): Promise<void> 
 					if (finished) return;
 					finished = true;
 					input.remove();
-					content.hidden = false;
+					text.hidden = false;
 				};
 				const save = async () => {
 					if (finished) return;

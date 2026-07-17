@@ -6,15 +6,18 @@ import {
 	TaskRepository,
 	type VaultAdapter,
 } from '../../src/repositories';
+import { serializeEmbeddedSubtask } from '../../src/markdown/embedded-subtask-parser';
 
 class MemoryVault implements VaultAdapter {
 	files = new Map<string, string>();
 	trashed: string[] = [];
+	reads: string[] = [];
 
 	async exists(path: string) {
 		return this.files.has(path);
 	}
 	async read(path: string) {
+		this.reads.push(path);
 		const value = this.files.get(path);
 		if (value === undefined) throw new Error(`Missing ${path}`);
 		return value;
@@ -79,6 +82,7 @@ describe('repositories', () => {
 			projectConfigDirectory: '项目管理/项目配置', defaultTaskDirectory: '项目管理/任务',
 			currentUserId: '8a67a66f-0109-47b3-9463-5d05b4295949',
 			people: [{ id: '8a67a66f-0109-47b3-9463-5d05b4295949', name: '张三', active: true }],
+			personMetadataFields: [],
 		};
 
 		await repository.create(config);
@@ -128,6 +132,25 @@ describe('repositories', () => {
 		expect(await vault.exists('new.md')).toBe(false);
 	});
 
+	it('discovers task sources only inside configured project directories', async () => {
+		const vault = new MemoryVault();
+		const repository = new TaskRepository(vault);
+		await repository.create('项目管理/任务/PROJ/PROJ-1.md', task);
+		vault.files.set('笔记/large.md', '# unrelated');
+		vault.reads = [];
+		const sources = await repository.listSources(['项目管理/任务/PROJ']);
+		expect(sources.map((source) => source.path)).toEqual(['项目管理/任务/PROJ/PROJ-1.md']);
+		expect(vault.reads).not.toContain('笔记/large.md');
+	});
+
+	it('does not scan the vault without configured project directories', async () => {
+		const vault = new MemoryVault();
+		vault.files.set('笔记/large.md', '# unrelated');
+		const repository = new TaskRepository(vault);
+		expect(await repository.listSources([])).toEqual([]);
+		expect(vault.reads).toEqual([]);
+	});
+
 	it('keeps a concurrent body edit when the modal did not change the body', async () => {
 		const vault = new MemoryVault();
 		const repository = new TaskRepository(vault);
@@ -139,6 +162,28 @@ describe('repositories', () => {
 		await repository.save('task.md', edited, project, baseline);
 		const saved = await repository.read('task.md', project);
 		expect(saved.document?.body).toBe('外部修改正文');
+	});
+
+	it('merges edited legacy subtasks with concurrently updated structured subtasks', async () => {
+		const vault = new MemoryVault();
+		const repository = new TaskRepository(vault);
+		const baseline = structuredClone(task);
+		baseline.subtasks = '- [ ] 原普通待办';
+		await repository.create('task.md', baseline);
+		const structured = serializeEmbeddedSubtask({
+			id: '550e8400', title: '结构化子任务', completed: false,
+			priority: 'high', scheduledDate: null, startDate: null, dueDate: null, tags: [],
+			createdDate: '2026-07-15', doneDate: null, cancelledDate: null,
+		});
+		const current = structuredClone(baseline);
+		current.subtasks = `- [ ] 原普通待办\n${structured}`;
+		vault.files.set('task.md', (await vault.read('task.md')).replace('- [ ] 原普通待办', current.subtasks));
+		const edited = structuredClone(baseline);
+		edited.subtasks = '- [ ] 已编辑普通待办';
+		await repository.save('task.md', edited, project, baseline);
+		const saved = await repository.read('task.md', project);
+		expect(saved.document?.subtasks).toContain('- [ ] 已编辑普通待办');
+		expect(saved.document?.subtasks).toContain('结构化子任务');
 	});
 
 	it('removes renamed custom keys while preserving unrelated unknown frontmatter', async () => {
