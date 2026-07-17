@@ -9,7 +9,10 @@ import { normalizePeopleSourceSettings, type PeopleSourceSettings } from '../ser
 import { normalizeNativeSidebarSettings, type NativeSidebarSettings } from './native-sidebar-settings';
 import { normalizeGlobalPeopleConfig } from '../services/person-metadata';
 
+export const CURRENT_CONFIGURATION_SCHEMA = 2;
+
 export interface ConfigurationSnapshot {
+	configurationSchema?: number;
 	globalConfig: GlobalConfig;
 	projects: ProjectConfig[];
 	tagOrder: string[];
@@ -27,6 +30,7 @@ export interface ConfigurationSnapshot {
 }
 
 export type NormalizedConfigurationSnapshot = ConfigurationSnapshot & {
+	configurationSchema: number;
 	taskTemplates: TaskConfigurationTemplate[];
 	savedProjectFilters: SavedProjectFilter[];
 	personalDashboardLayout: PersonalDashboardCardLayout[];
@@ -43,6 +47,10 @@ export type NormalizedConfigurationSnapshot = ConfigurationSnapshot & {
 export function normalizeConfigurationSnapshot(
 	snapshot: ConfigurationSnapshot,
 ): NormalizedConfigurationSnapshot {
+	const configurationSchema = snapshot.configurationSchema ?? 1;
+	if (configurationSchema > CURRENT_CONFIGURATION_SCHEMA) {
+		throw new Error(`配置版本 ${configurationSchema} 高于当前支持版本 ${CURRENT_CONFIGURATION_SCHEMA}。`);
+	}
 	const settingsSource = snapshot.personalDashboardSettings;
 	const weatherCredentials = settingsSource?.weatherCredentials;
 	const legacyWeatherCards = (snapshot.personalDashboardLayout ?? []).filter((card) => card.kind === 'weather');
@@ -105,6 +113,7 @@ export function normalizeConfigurationSnapshot(
 	const customFields = [...new Map(projects.flatMap((project) => project.customFields).map((field) => [field.key, field])).values()];
 	return {
 		...structuredClone(snapshot),
+		configurationSchema: CURRENT_CONFIGURATION_SCHEMA,
 		globalConfig: normalizeGlobalPeopleConfig(snapshot.globalConfig),
 		projects,
 		tagOrder: [...(snapshot.tagOrder ?? [])],

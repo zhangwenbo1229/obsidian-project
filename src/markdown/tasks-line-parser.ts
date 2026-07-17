@@ -1,4 +1,5 @@
 export type TasksLinePriority = 'high' | 'medium' | 'low' | 'normal';
+import { decodeTaskCustomMetadataTag, encodeTaskCustomMetadataTag } from './task-custom-metadata-codec';
 
 export interface TasksLine {
 	marker: '-' | '*' | '+';
@@ -22,7 +23,7 @@ const DATE_TOKEN = /^(⏳|🛫|📅|➕|✅|❌)\s+(\d{4}-\d{2}-\d{2})(?:\s+|$)/
 const ID_TOKEN = /^🆔\s+([A-Za-z0-9_-]+)(?:\s+|$)/u;
 const TAG_TOKEN = /^(#[\p{L}\p{N}_/-]+)(?:\s+|$)/u;
 const PRIORITY_TOKEN = /^(⏫|🔼|🔽)(?:\s+|$)/u;
-const CUSTOM_TOKEN = /^#op-meta\/([A-Za-z0-9_-]+)\/([A-Za-z0-9_-]+)(?:\s+|$)/u;
+const CUSTOM_TOKEN = /^(#op-meta\/(?:v1\/)?[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+)(?:\s+|$)/u;
 
 interface TasksLineParts {
 	indent: string;
@@ -47,27 +48,8 @@ function priorityEmoji(value: TasksLinePriority): string {
 	return '';
 }
 
-function encodeSegment(value: unknown): string {
-	const bytes = new TextEncoder().encode(JSON.stringify(value));
-	let binary = '';
-	for (const byte of bytes) binary += String.fromCharCode(byte);
-	return btoa(binary).replace(/\+/gu, '-').replace(/\//gu, '_').replace(/=+$/gu, '');
-}
-
-function decodeSegment(value: string): unknown {
-	const normalized = value.replace(/-/gu, '+').replace(/_/gu, '/');
-	const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
-	const binary = atob(padded);
-	const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-	return JSON.parse(new TextDecoder().decode(bytes));
-}
-
 function decodeCustomToken(match: RegExpMatchArray): [string, unknown] | null {
-	try {
-		const key = decodeSegment(match[1]!);
-		if (typeof key !== 'string' || !key) return null;
-		return [key, decodeSegment(match[2]!)];
-	} catch { return null; }
+	return decodeTaskCustomMetadataTag(match[1]!);
 }
 
 function parseMetadata(source: string): Omit<TasksLine, 'marker' | 'status' | 'completed' | 'title'> | null {
@@ -141,7 +123,7 @@ export function serializeTasksLine(task: TasksLine): string {
 	const parts = [task.title.trim(), ...task.tags.map((tag) => `#${tag.replace(/^#+/u, '')}`)];
 	for (const [key, value] of Object.entries(task.custom ?? {}).sort(([left], [right]) => left.localeCompare(right))) {
 		if (value === undefined || value === null || value === '' || (Array.isArray(value) && value.length === 0)) continue;
-		parts.push(`#op-meta/${encodeSegment(key)}/${encodeSegment(value)}`);
+		parts.push(encodeTaskCustomMetadataTag(key, value));
 	}
 	const priority = priorityEmoji(task.priority);
 	if (priority) parts.push(priority);

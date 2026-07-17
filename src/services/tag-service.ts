@@ -1,4 +1,5 @@
 import type { TagStyle } from '../domain/types';
+import { isInternalTaskMetadataTag } from '../markdown/task-custom-metadata-codec';
 
 export function renameTagPath(
 	tags: readonly string[],
@@ -8,6 +9,9 @@ export function renameTagPath(
 	const normalizedOld = oldPath.trim().replace(/^#|\/$/gu, '');
 	const normalizedNew = newPath.trim().replace(/^#|\/$/gu, '');
 	if (!normalizedOld || !normalizedNew) throw new Error('标签路径不能为空。');
+	if (isInternalTaskMetadataTag(normalizedOld) || isInternalTaskMetadataTag(normalizedNew)) {
+		throw new Error('内部任务元数据标签不能编辑。');
+	}
 	return [...new Set(tags.map((tag) => {
 		if (tag === normalizedOld) return normalizedNew;
 		if (tag.startsWith(`${normalizedOld}/`)) return `${normalizedNew}${tag.slice(normalizedOld.length)}`;

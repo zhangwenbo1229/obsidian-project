@@ -10,9 +10,9 @@ async function renderTodo(context: DashboardModuleRenderContext): Promise<void> 
 	const config = context.card.moduleConfig as TodoDashboardModuleConfig;
 	const body = createModuleBody(context.container, 'op-todo-card');
 	renderModuleMessage(body, 'loader-circle', '正在收集待办', '正在读取指定目录中的 Markdown 任务。', 'op-dashboard-module-loading');
-	const files = context.manager.app.vault.getMarkdownFiles()
+	const files = context.manager.dashboardVaultCache.markdownFiles()
 		.filter((file) => isTodoPathInScope(file.path, config.rootPaths, config.excludePaths));
-	const sources = await Promise.all(files.map(async (file) => ({ path: file.path, content: await context.manager.app.vault.cachedRead(file), file })));
+	const sources = await Promise.all(files.map(async (file) => ({ path: file.path, content: await context.manager.dashboardVaultCache.read(file), file })));
 	if (!context.isCurrent()) return;
 	const todos = collectIncompleteTodos(sources, config.rootPaths, config.excludePaths, config.limit);
 	body.empty();

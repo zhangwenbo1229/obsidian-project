@@ -9,7 +9,7 @@ function renderRecentFiles(context: DashboardModuleRenderContext): void {
 	const body = createModuleBody(context.container, 'op-recent-files-card');
 	const config = context.card.moduleConfig as RecentFilesDashboardModuleConfig;
 	const files = selectDashboardFiles(
-		context.manager.app.vault.getFiles(),
+		context.manager.dashboardVaultCache.allFiles(),
 		config.rootPath,
 		config.limit,
 		config.excludePaths,

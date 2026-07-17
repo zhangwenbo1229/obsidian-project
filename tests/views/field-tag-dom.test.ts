@@ -3,6 +3,7 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { applyValuePresentation, renderFieldLabel } from '../../src/views/field-presentation';
 import { renderGroupedTagPicker } from '../../src/modals/grouped-tag-picker';
+import { applyInternalTagVisibility } from '../../src/integrations/native-sidebar-dom';
 
 type CreateOptions = { cls?: string; text?: string; type?: string; attr?: Record<string, string> };
 
@@ -63,5 +64,14 @@ describe('field and tag DOM behavior', () => {
 			.find((button) => button.textContent === 'feature/web')!;
 		suggestion.click();
 		expect(onChange).toHaveBeenLastCalledWith(['feature/web']);
+	});
+
+	it('hides the internal task metadata namespace from the native tag sidebar', () => {
+		const wrapper = document.body.createDiv({ cls: 'tree-item' });
+		const row = wrapper.createDiv({ cls: 'tag-pane-tag' });
+		expect(applyInternalTagVisibility(row, 'op-meta')).toBe(true);
+		expect(wrapper.classList.contains('op-internal-task-metadata-tag')).toBe(true);
+		expect(applyInternalTagVisibility(row, 'feature/mobile')).toBe(false);
+		expect(wrapper.classList.contains('op-internal-task-metadata-tag')).toBe(false);
 	});
 });

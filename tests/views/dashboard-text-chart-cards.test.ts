@@ -24,9 +24,10 @@ describe('dashboard text and chart cards', () => {
 	});
 
 	it('provides editable CSV table controls and chart type selection', () => {
-		const settings = readFileSync(new URL('../../src/views/dashboard-modules/module-settings.ts', import.meta.url), 'utf8');
-		expect(settings).toContain('renderTextSettings');
-		expect(settings).toContain('renderChartSettings');
+		const settingsIndex = readFileSync(new URL('../../src/views/dashboard-modules/module-settings.ts', import.meta.url), 'utf8');
+		const settings = readFileSync(new URL('../../src/views/dashboard-modules/content-settings.ts', import.meta.url), 'utf8');
+		expect(settingsIndex).toContain('renderTextSettings');
+		expect(settingsIndex).toContain('renderChartSettings');
 		expect(settings).toContain('op-chart-data-table');
 		expect(settings).toContain('粘贴 CSV');
 		expect(settings).toContain('新增数据行');

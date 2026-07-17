@@ -17,9 +17,10 @@ import { formatCustomFieldValue } from './custom-field-presentation';
 import { calendarMonthCells, calendarRangeTitle, calendarWeekDates, moveCalendarCursor } from './calendar-range';
 import { renderProjectList } from './project-list-renderer';
 import { layoutCalendarSpans, type CalendarSpanLayout } from './calendar-span-layout';
+import { renderProjectViewContent, type ProjectViewMode } from './project-view-content-renderer';
 
 export const PROJECT_VIEW_TYPE = 'obsidian-project-project';
-type Mode = 'list' | 'board' | 'calendar' | 'quadrants';
+type Mode = ProjectViewMode;
 
 export class ProjectView extends ItemView {
 	private projectUid = ALL_PROJECTS_UID;
@@ -448,17 +449,14 @@ export class ProjectView extends ItemView {
 		}
 	}
 	private renderContent(container: HTMLElement): void {
-		container.querySelector('.op-project-content')?.remove();
-		const content = container.createDiv({ cls: 'op-project-content' });
 		const tasks = filterProjectTasks(this.manager.index.validTasks(), this.currentFilters());
-		const results = content.createDiv({ cls: 'op-results-bar' });
-		results.createEl('strong', { text: `${tasks.length} 个任务` });
-		results.createSpan({ text: this.mode === 'board' ? '按工作流状态分组' : this.mode === 'calendar' ? '按开始日期与计划日期展示' : this.mode === 'quadrants' ? '高优先级为重要，3 天内到期为紧急' : '点击表头可临时排序' });
-		const surface = content.createDiv({ cls: 'op-mode-surface' });
-		if (this.mode === 'board') this.renderBoard(surface, tasks);
-		else if (this.mode === 'calendar') this.renderCalendar(surface, tasks);
-		else if (this.mode === 'quadrants') this.renderQuadrants(surface, tasks);
-		else this.renderList(surface, tasks);
+		renderProjectViewContent({
+			container, mode: this.mode, tasks,
+			renderList: (parent, entries) => this.renderList(parent, [...entries]),
+			renderBoard: (parent, entries) => this.renderBoard(parent, [...entries]),
+			renderCalendar: (parent, entries) => this.renderCalendar(parent, [...entries]),
+			renderQuadrants: (parent, entries) => this.renderQuadrants(parent, [...entries]),
+		});
 	}
 
 	private renderQuadrants(parent: HTMLElement, tasks: ReturnType<typeof filterProjectTasks>): void {

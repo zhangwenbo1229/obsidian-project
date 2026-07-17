@@ -10,7 +10,7 @@ function renderHeatmap(context: DashboardModuleRenderContext): void {
 	const body = createModuleBody(context.container, 'op-heatmap-card');
 	const model = config.useCheckInData
 		? buildCheckInHeatmap(checkInHistoryFor(context.manager.personalDashboardSettings.checkInHistories, config.checkInCardId), config.days)
-		: buildVaultHeatmap(context.manager.app.vault.getFiles(), config.rootPaths, config.excludePaths, config.days);
+		: buildVaultHeatmap(context.manager.dashboardVaultCache.allFiles(), config.rootPaths, config.excludePaths, config.days);
 	const summary = body.createDiv({ cls: 'op-heatmap-summary' });
 	summary.createEl('strong', { text: String(model.total) });
 	summary.createSpan({ text: config.useCheckInData ? `${config.days} 天内打卡次数` : `${config.days} 天内最后修改的文件` });

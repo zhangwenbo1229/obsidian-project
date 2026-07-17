@@ -2,6 +2,7 @@ import type { IframeDashboardModuleConfig } from '../../domain/types';
 import { createModuleBody, renderModuleMessage } from './card-ui';
 import { renderIframeSettings } from './module-settings';
 import type { DashboardModuleDefinition, DashboardModuleRenderContext } from './types';
+import { validateIframeUrl } from './iframe-url';
 
 function renderIframe(context: DashboardModuleRenderContext): void {
 	const body = createModuleBody(context.container, 'op-iframe-card');
@@ -10,10 +11,17 @@ function renderIframe(context: DashboardModuleRenderContext): void {
 		renderModuleMessage(body, 'panels-top-left', '未配置网页', '右键打开卡片设置，输入需要嵌入的网页地址。');
 		return;
 	}
+	let url: string;
+	try {
+		url = validateIframeUrl(config.url);
+	} catch (error) {
+		renderModuleMessage(body, 'shield-alert', '网页地址不可用', error instanceof Error ? error.message : String(error));
+		return;
+	}
 	const iframe = body.createEl('iframe', {
 		cls: 'op-iframe-card-frame',
 		attr: {
-			src: config.url,
+			src: url,
 			sandbox: 'allow-forms allow-popups allow-scripts allow-same-origin',
 			referrerpolicy: 'no-referrer',
 			loading: 'lazy',

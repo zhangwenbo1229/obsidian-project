@@ -75,4 +75,9 @@ describe('tag editing', () => {
 		expect(reparent('work', 'work/backend')).toBeNull();
 		expect(reparent('work', 'work')).toBeNull();
 	});
+
+	it('rejects rename attempts that target the internal task metadata namespace', () => {
+		expect(() => renameTagPath(['feature'], 'feature', 'op-meta')).toThrow('内部任务元数据标签不能编辑');
+		expect(() => renameTagPath(['op-meta'], 'op-meta', 'feature')).toThrow('内部任务元数据标签不能编辑');
+	});
 });

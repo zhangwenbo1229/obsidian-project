@@ -59,11 +59,19 @@ import { normalizePersonMetadataFields, normalizePersonMetadataValue, normalizeP
 import type { PersonNamePresentation } from '../domain/types';
 import { DEFAULT_PERSON_DIRECTORY, personMarkdownPath, serializePersonMarkdown } from '../markdown/person-parser';
 import { personDeletionBlockReason } from './person-deletion';
+import { ConfigurationWriteQueue } from '../settings/configuration-write-queue';
+import { DashboardVaultCache } from './dashboard-vault-cache';
+import {
+	configurationCustomFields,
+	configurationWorkflowStatuses,
+	createProjectManagerConfigurationSnapshot,
+} from './project-manager-configuration';
 
 export const DEFAULT_GLOBAL_CONFIG_PATH = '项目管理/全局配置.md';
 
 export class ProjectManager {
 	readonly index = new TaskIndex();
+	readonly dashboardVaultCache: DashboardVaultCache;
 	globalConfig!: GlobalConfig;
 	projects: ProjectConfig[] = [];
 	tagOrder: string[] = [];
@@ -90,6 +98,7 @@ export class ProjectManager {
 	private dashboardFileOpenSave: Promise<void> = Promise.resolve();
 	private taskIndexInitialization: Promise<void> | null = null;
 	private taskIndexReady = false;
+	private readonly configurationWrites: ConfigurationWriteQueue<ConfigurationSnapshot>;
 
 	constructor(
 		readonly app: App,
@@ -98,6 +107,8 @@ export class ProjectManager {
 	) {
 		this.vault = new ObsidianVaultAdapter(app);
 		this.taskRepository = new TaskRepository(this.vault);
+		this.dashboardVaultCache = new DashboardVaultCache(app.vault);
+		this.configurationWrites = new ConfigurationWriteQueue((snapshot) => this.configStore.save(snapshot));
 	}
 
 	async initialize(): Promise<void> {
@@ -295,15 +306,15 @@ export class ProjectManager {
 	}
 
 	private configurationCustomFields(projects = this.projects) {
-		return [...new Map(projects.flatMap((project) => project.customFields).map((field) => [field.key, field])).values()];
+		return configurationCustomFields(projects);
 	}
 
 	private configurationWorkflowStatuses(projects = this.projects) {
-		return [...new Map(projects.flatMap((project) => project.workflow.statuses).map((status) => [status.id, status])).values()];
+		return configurationWorkflowStatuses(projects);
 	}
 
 	private snapshot(): ConfigurationSnapshot {
-		return {
+		return createProjectManagerConfigurationSnapshot({
 			globalConfig: structuredClone(this.globalConfig),
 			projects: structuredClone(this.projects),
 			tagOrder: [...this.tagOrder],
@@ -318,7 +329,7 @@ export class ProjectManager {
 			taskMetadataSettings: normalizeTaskMetadataSettings(this.taskMetadataSettings),
 			peopleSourceSettings: normalizePeopleSourceSettings(this.peopleSourceSettings),
 			nativeSidebarSettings: normalizeNativeSidebarSettings(this.nativeSidebarSettings),
-		};
+		});
 	}
 
 	async saveTaskMetadataSettings(settings: TaskMetadataSettings): Promise<void> {
@@ -383,7 +394,7 @@ export class ProjectManager {
 		const issues = [...globalValidation.issues, ...projectIssues];
 		if (issues.length > 0) throw new Error(issues.map((issue) => issue.message).join('\n'));
 		try {
-			await this.configStore.save(normalized);
+			await this.configurationWrites.enqueue(normalized);
 			const verified = await this.configStore.load();
 			if (!verified || JSON.stringify(normalizeConfigurationSnapshot(verified)) !== JSON.stringify(normalized)) {
 				throw new Error('导入配置写入后验证失败。');
@@ -391,7 +402,7 @@ export class ProjectManager {
 			this.applyConfiguration(normalized);
 			await this.rebuildTaskIndex();
 		} catch (error) {
-			await this.configStore.save(previous);
+			await this.configurationWrites.enqueue(previous);
 			this.applyConfiguration(previous);
 			await this.rebuildTaskIndex();
 			throw error;
@@ -399,7 +410,7 @@ export class ProjectManager {
 	}
 
 	private async persistConfiguration(): Promise<void> {
-		await this.configStore.save(this.snapshot());
+		await this.configurationWrites.enqueue(this.snapshot());
 	}
 
 	private replaceProject(project: ProjectConfig): void {

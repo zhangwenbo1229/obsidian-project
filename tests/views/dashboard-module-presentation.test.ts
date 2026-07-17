@@ -48,7 +48,7 @@ describe('dashboard module presentation', () => {
 	});
 
 	it('builds the activity heatmap from every Vault file', () => {
-		expect(heatmap).toContain('vault.getFiles()');
+		expect(heatmap).toContain('dashboardVaultCache.allFiles()');
 		expect(heatmap).not.toContain('vault.getMarkdownFiles()');
 		expect(heatmap).toContain("icon: 'layout-grid'");
 	});

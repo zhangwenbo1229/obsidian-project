@@ -5,8 +5,8 @@ import { TagStyleModal } from '../modals/tag-style-modal';
 import { TagGroupModal } from '../modals/tag-group-modal';
 import { TagGroupAssignmentModal } from '../modals/tag-group-assignment-modal';
 import { groupTags } from '../services/tag-group-service';
+import { applyInternalTagVisibility, closestNativeTagRow, findNativeTagRows, nativeTagTextFromRow } from './native-sidebar-dom';
 
-const TAG_ROW_SELECTOR = '.tag-pane-tag';
 const TAG_CONTAINER_SELECTOR = '.tag-container, .tag-pane-tags';
 const TAG_DRAG_TYPE = 'application/x-obsidian-project-tag';
 
@@ -20,9 +20,7 @@ function normalizeTagPath(value: string | null | undefined): string {
 }
 
 function findBuiltinTagText(row: HTMLElement): HTMLElement | null {
-	return row.querySelector<HTMLElement>('.tag-pane-tag-text')
-		?? row.querySelector<HTMLElement>('.tree-item-inner-text .tree-item-inner-text')
-		?? row.querySelector<HTMLElement>('.tree-item-inner > .tree-item-inner-text');
+	return nativeTagTextFromRow(row);
 }
 
 function extractTagPath(row: HTMLElement, text: HTMLElement): string {
@@ -42,7 +40,8 @@ function extractTagPath(row: HTMLElement, text: HTMLElement): string {
 }
 
 export function registerBuiltinTagEditor(plugin: Plugin, manager: ProjectManager): void {
-	const ownerDocument = plugin.app.workspace.containerEl.ownerDocument;
+	const workspaceRoot = plugin.app.workspace.containerEl;
+	const ownerDocument = workspaceRoot.ownerDocument;
 	let dropTarget: HTMLElement | null = null;
 	let styleRefreshQueued = false;
 	let styleRefreshTimer: number | undefined;
@@ -58,7 +57,7 @@ export function registerBuiltinTagEditor(plugin: Plugin, manager: ProjectManager
 		dropTarget = null;
 	};
 	const applyTagGroups = () => {
-		const rootEntries = Array.from(ownerDocument.querySelectorAll<HTMLElement>(TAG_ROW_SELECTOR)).flatMap((row) => {
+		const rootEntries = findNativeTagRows(ownerDocument).flatMap((row) => {
 			const wrapper = row.closest<HTMLElement>('.tree-item');
 			if (!wrapper || wrapper.parentElement?.closest('.tree-item-children')) return [];
 			const text = findBuiltinTagText(row);
@@ -97,15 +96,20 @@ export function registerBuiltinTagEditor(plugin: Plugin, manager: ProjectManager
 	};
 	const applyTagStyles = () => {
 		styleRefreshQueued = false;
+		const visibleRows = findNativeTagRows(ownerDocument).filter((row) => {
+			const text = findBuiltinTagText(row);
+			const path = text ? extractTagPath(row, text) : '';
+			return !path || !applyInternalTagVisibility(row, path);
+		});
 		if (!manager.nativeSidebarSettings.tagsEnabled) {
 			ownerDocument.querySelectorAll('.op-tag-group-heading').forEach((element) => element.remove());
-			for (const row of Array.from(ownerDocument.querySelectorAll<HTMLElement>(TAG_ROW_SELECTOR))) {
+			for (const row of visibleRows) {
 				findBuiltinTagText(row)?.style.removeProperty('color');
 				row.querySelector(':scope .op-builtin-tag-style-icon')?.remove();
 			}
 			return;
 		}
-		for (const row of Array.from(ownerDocument.querySelectorAll<HTMLElement>(TAG_ROW_SELECTOR))) {
+		for (const row of visibleRows) {
 			if (row.querySelector('.op-builtin-tag-input')) continue;
 			const text = findBuiltinTagText(row);
 			if (!text) continue;
@@ -149,7 +153,7 @@ export function registerBuiltinTagEditor(plugin: Plugin, manager: ProjectManager
 	};
 	const Observer = ownerDocument.defaultView?.MutationObserver;
 	const observer = Observer ? new Observer(scheduleTagStyleRefresh) : null;
-	observer?.observe(ownerDocument.body, { childList: true, subtree: true });
+	observer?.observe(workspaceRoot, { childList: true, subtree: true });
 	plugin.register(() => {
 		observer?.disconnect();
 		if (styleRefreshTimer !== undefined) ownerDocument.defaultView?.clearTimeout(styleRefreshTimer);
@@ -183,7 +187,7 @@ export function registerBuiltinTagEditor(plugin: Plugin, manager: ProjectManager
 			menu.showAtMouseEvent(event);
 			return;
 		}
-		const row = target?.closest<HTMLElement>(TAG_ROW_SELECTOR);
+		const row = target ? closestNativeTagRow(target) : null;
 		const text = row ? findBuiltinTagText(row) : null;
 		if (!row || !text) return;
 		const path = extractTagPath(row, text);
@@ -207,12 +211,14 @@ export function registerBuiltinTagEditor(plugin: Plugin, manager: ProjectManager
 	});
 	plugin.registerDomEvent(ownerDocument, 'pointerdown', (event) => {
 		if (!manager.nativeSidebarSettings.tagsEnabled) return;
-		const row = elementFromEvent(event)?.closest<HTMLElement>(TAG_ROW_SELECTOR);
+		const eventTarget = elementFromEvent(event);
+		const row = eventTarget ? closestNativeTagRow(eventTarget) : null;
 		if (row) row.draggable = true;
 	});
 	plugin.registerDomEvent(ownerDocument, 'dragstart', (event) => {
 		if (!manager.nativeSidebarSettings.tagsEnabled) return;
-		const row = elementFromEvent(event)?.closest<HTMLElement>(TAG_ROW_SELECTOR);
+		const eventTarget = elementFromEvent(event);
+		const row = eventTarget ? closestNativeTagRow(eventTarget) : null;
 		const text = row ? findBuiltinTagText(row) : null;
 		if (!row || !text || !event.dataTransfer) return;
 		const path = extractTagPath(row, text);
@@ -224,7 +230,7 @@ export function registerBuiltinTagEditor(plugin: Plugin, manager: ProjectManager
 	plugin.registerDomEvent(ownerDocument, 'dragover', (event) => {
 		if (!manager.nativeSidebarSettings.tagsEnabled) return;
 		const target = elementFromEvent(event);
-		const row = target?.closest<HTMLElement>(TAG_ROW_SELECTOR) ?? null;
+		const row = target ? closestNativeTagRow(target) : null;
 		const container = target?.closest<HTMLElement>(TAG_CONTAINER_SELECTOR);
 		if (!row && !container) return;
 		event.preventDefault();
@@ -238,7 +244,7 @@ export function registerBuiltinTagEditor(plugin: Plugin, manager: ProjectManager
 	plugin.registerDomEvent(ownerDocument, 'drop', (event) => {
 		if (!manager.nativeSidebarSettings.tagsEnabled) return;
 		const target = elementFromEvent(event);
-		const row = target?.closest<HTMLElement>(TAG_ROW_SELECTOR) ?? null;
+		const row = target ? closestNativeTagRow(target) : null;
 		const container = target?.closest<HTMLElement>(TAG_CONTAINER_SELECTOR);
 		if ((!row && !container) || !event.dataTransfer) return;
 		event.preventDefault();
@@ -263,7 +269,7 @@ export function registerBuiltinTagEditor(plugin: Plugin, manager: ProjectManager
 		if (!manager.nativeSidebarSettings.tagsEnabled) return;
 		const target = elementFromEvent(event);
 		if (!target) return;
-		const row = target.closest<HTMLElement>(TAG_ROW_SELECTOR);
+		const row = closestNativeTagRow(target);
 		if (!row || row.querySelector('.op-builtin-tag-input')) return;
 		const text = findBuiltinTagText(row);
 		if (!text) return;

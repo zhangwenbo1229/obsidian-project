@@ -2,8 +2,16 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import { DashboardRequestPolicy, validateDashboardUrl } from '../../src/views/dashboard-modules/request-policy';
+import { validateIframeUrl } from '../../src/views/dashboard-modules/iframe-url';
 
 describe('dashboard network request policy', () => {
+	it('allows only credential-free HTTP(S) iframe addresses', () => {
+		expect(validateIframeUrl('https://example.com/widget')).toBe('https://example.com/widget');
+		expect(validateIframeUrl('http://example.com/widget')).toBe('http://example.com/widget');
+		for (const value of ['javascript:alert(1)', 'data:text/html,test', 'file:///tmp/note.md', 'https://user:secret@example.com']) {
+			expect(() => validateIframeUrl(value)).toThrow('网页卡片');
+		}
+	});
 	it('allows public HTTPS and rejects insecure or private destinations', () => {
 		expect(validateDashboardUrl('https://example.com/feed')).toBe('https://example.com/feed');
 		for (const url of [

@@ -9,10 +9,10 @@ async function renderNoteStats(context: DashboardModuleRenderContext): Promise<v
 	const body = createModuleBody(context.container, 'op-note-stats-card');
 	renderModuleMessage(body, 'loader-circle', '正在统计', '正在读取所选范围内的文件。', 'op-dashboard-module-loading');
 	const config = context.card.moduleConfig as NoteStatsDashboardModuleConfig;
-	const files = context.manager.app.vault.getFiles();
+	const files = context.manager.dashboardVaultCache.allFiles();
 	const stats = await collectNoteStatistics(
 		files,
-		(file) => context.manager.app.vault.cachedRead(file).catch(() => ''),
+		(file) => context.manager.dashboardVaultCache.read(file).catch(() => ''),
 		config.rootPath,
 		config.topFolderLimit,
 		config.excludePaths,

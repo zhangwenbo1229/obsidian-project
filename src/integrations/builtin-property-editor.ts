@@ -1,18 +1,18 @@
 import { Menu, Plugin, setIcon } from 'obsidian';
 import type { NativeSidebarSettings } from '../settings/native-sidebar-settings';
-
-const PROPERTY_ROW_SELECTOR = '.metadata-property, [data-property-key], [data-type="all-properties"] .tree-item-self';
+import {
+	closestNativePropertyRow,
+	findNativePropertyMenu,
+	findNativePropertyRows,
+	nativePropertyKeyFromRow,
+} from './native-sidebar-dom';
 
 export function nativePropertyKey(row: HTMLElement): string {
-	return (row.dataset.propertyKey
-		?? row.querySelector<HTMLInputElement>('.metadata-property-key-input')?.value
-		?? row.querySelector<HTMLElement>('.metadata-property-key')?.textContent
-		?? row.querySelector<HTMLElement>('.tree-item-inner-text')?.textContent
-		?? '').trim();
+	return nativePropertyKeyFromRow(row);
 }
 
 export function collectNativePropertyRows(root: ParentNode): HTMLElement[] {
-	return Array.from(root.querySelectorAll<HTMLElement>(PROPERTY_ROW_SELECTOR));
+	return findNativePropertyRows(root);
 }
 
 export function nativePropertyGroupAnchor(row: HTMLElement): HTMLElement {
@@ -123,12 +123,9 @@ export function appendNativePropertyMenuActions(
 	onEditProperty: () => void,
 	onCreateGroup: () => void,
 ): boolean {
-	const nativeMenu = Array.from(root.querySelectorAll<HTMLElement>('.menu')).reverse()
-		.find((menu) => menu.textContent?.includes('删除属性'));
-	if (!nativeMenu) return false;
-	const actionGroup = Array.from(nativeMenu.querySelectorAll<HTMLElement>('.menu-group'))
-		.find((group) => !group.textContent?.includes('删除属性'));
-	if (!actionGroup) return false;
+	const native = findNativePropertyMenu(root);
+	if (!native) return false;
+	const { menu: nativeMenu, actionGroup } = native;
 	addNativePropertyMenuItem(nativeMenu, actionGroup, '编辑属性样式与分组', 'palette', onEditProperty);
 	addNativePropertyMenuItem(nativeMenu, actionGroup, '新建属性分组', 'folder-plus', onCreateGroup);
 	return true;
@@ -141,7 +138,8 @@ export function registerBuiltinPropertyEditor(
 	onEditGroup: (groupId?: string) => void,
 	onDeleteGroup: (groupId: string) => void,
 ): void {
-	const ownerDocument = plugin.app.workspace.containerEl.ownerDocument;
+	const workspaceRoot = plugin.app.workspace.containerEl;
+	const ownerDocument = workspaceRoot.ownerDocument;
 	const Observer = ownerDocument.defaultView?.MutationObserver;
 	const observerOptions: MutationObserverInit = { childList: true, subtree: true };
 	let observer: MutationObserver | null = null;
@@ -178,7 +176,7 @@ export function registerBuiltinPropertyEditor(
 	let queued = false;
 	let refreshTimer: number | undefined;
 	let menuActionTimer: number | undefined;
-	const observe = () => observer?.observe(ownerDocument.body, observerOptions);
+	const observe = () => observer?.observe(workspaceRoot, observerOptions);
 	const render = () => {
 		observer?.disconnect();
 		try {
@@ -202,7 +200,7 @@ export function registerBuiltinPropertyEditor(
 	plugin.registerDomEvent(ownerDocument, 'contextmenu', (event) => {
 		const target = event.target instanceof HTMLElement ? event.target : null;
 		const heading = target?.closest<HTMLElement>('.op-property-group-heading');
-		const row = target?.closest<HTMLElement>(PROPERTY_ROW_SELECTOR);
+		const row = target ? closestNativePropertyRow(target) : null;
 		if (!settings().propertiesEnabled || (!heading && !row)) return;
 		if (heading) {
 			event.preventDefault();

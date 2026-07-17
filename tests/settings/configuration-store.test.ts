@@ -35,6 +35,16 @@ describe('configuration store migration', () => {
 		expect(normalized.globalConfig.personMetadataFields).toEqual([]);
 	});
 
+	it('adds the current configuration schema to unversioned snapshots', () => {
+		const normalized = normalizeConfigurationSnapshot(snapshot);
+		expect(normalized.configurationSchema).toBe(2);
+	});
+
+	it('rejects configuration snapshots created by a newer plugin schema', () => {
+		expect(() => normalizeConfigurationSnapshot({ ...snapshot, configurationSchema: 999 }))
+			.toThrow('配置版本 999 高于当前支持版本 2');
+	});
+
 	it('migrates legacy person title, icon and color values into person metadata', () => {
 		const legacy = structuredClone(snapshot);
 		legacy.globalConfig.people[0] = {

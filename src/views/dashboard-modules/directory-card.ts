@@ -30,7 +30,7 @@ function renderTreeNode(parent: HTMLElement, node: DirectoryTreeNode, context: D
 function renderDirectory(context: DashboardModuleRenderContext): void {
 	const body = createModuleBody(context.container, 'op-directory-card');
 	const config = context.card.moduleConfig as DirectoryDashboardModuleConfig;
-	const tree = buildDirectoryTree(context.manager.app.vault.getMarkdownFiles(), config.rootPaths, config.maxDepth);
+	const tree = buildDirectoryTree(context.manager.dashboardVaultCache.markdownFiles(), config.rootPaths, config.maxDepth);
 	if (tree.length === 0) {
 		renderModuleMessage(body, 'folder-open', '目录为空', '调整根目录配置，或先创建 Markdown 笔记。');
 		return;
