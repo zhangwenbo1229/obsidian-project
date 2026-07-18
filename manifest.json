@@ -1,8 +1,9 @@
 {
 	"id": "obsidian-project",
 	"name": "obsidian-project",
-	"version": "1.1.1",
+	"version": "1.2.0",
 	"minAppVersion": "1.7.2",
-	"description": "使用 Markdown 管理项目、任务和工作流。",
+	"author": "zhangwenbo1229",
+	"description": "项目管理与个人工作台 - 多视图项目管理、任务追踪、可配置仪表盘卡片、Markdown 原生存储。",
 	"isDesktopOnly": false
 }
