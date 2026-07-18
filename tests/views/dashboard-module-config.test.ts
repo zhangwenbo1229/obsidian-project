@@ -10,7 +10,7 @@ describe('personal dashboard module configuration', () => {
 	it('catalogs every module with practical default card sizes', () => {
 		expect(DASHBOARD_MODULE_CATALOG.map((item) => item.kind)).toEqual([
 			'weather', 'calendar', 'date', 'todo', 'note-stats', 'recent-files', 'news', 'directory', 'text', 'chart',
-			'countdown', 'progress', 'check-in', 'heatmap', 'iframe',
+			'countdown', 'progress', 'check-in', 'heatmap', 'iframe', 'calculator', 'ip',
 		]);
 		expect(DASHBOARD_MODULE_CATALOG.find((item) => item.kind === 'calendar')?.defaultSize).toEqual({ columns: 2, rows: 3 });
 		expect(DASHBOARD_MODULE_CATALOG.find((item) => item.kind === 'weather')?.icon).toBe('cloud-sun');
@@ -97,9 +97,9 @@ describe('personal dashboard module configuration', () => {
 			showAxes: true, showLegend: true, showDataLabels: false,
 			axisColor: '#8590a2', legendColor: '#626f86', dataLabelColor: '#44546f',
 		});
-		expect(normalizeDashboardModuleConfig('iframe', { url: 'javascript:alert(1)' })).toEqual({ url: '' });
-		expect(normalizeDashboardModuleConfig('iframe', { url: 'https://cn.widgetstore.net/view/index.html?q=demo' }))
-			.toEqual({ url: 'https://cn.widgetstore.net/view/index.html?q=demo' });
+		expect(normalizeDashboardModuleConfig('iframe', { url: 'javascript:alert(1)' })).toEqual({ url: '', width: 0, height: 0 });
+		expect(normalizeDashboardModuleConfig('iframe', { url: 'https://cn.widgetstore.net/view/index.html?q=demo', width: 400, height: 300 }))
+			.toEqual({ url: 'https://cn.widgetstore.net/view/index.html?q=demo', width: 400, height: 300 });
 	});
 
 	it('creates and migrates independently configured module cards', () => {

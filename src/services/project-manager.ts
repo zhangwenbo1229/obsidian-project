@@ -12,7 +12,7 @@ import type {
 	Person,
 	PersonMetadataFieldDefinition,
 } from '../domain/types';
-import { validateGlobalConfig, validateProjectConfig, validateTaskMetadata, validateTaskReferences } from '../domain/validation';
+import { validateGlobalConfig, validateProjectConfig, validateTaskReferences } from '../domain/validation';
 import { collectTaskTree } from '../domain/relations';
 import { validateProjectDeletion } from './project-service';
 import { reconcileProtectedIdentity, type ProtectedIdentity } from '../domain/protected-fields';
@@ -26,39 +26,25 @@ import {
 } from '../repositories';
 import { ObsidianVaultAdapter } from '../repositories/obsidian-vault-adapter';
 import { MigrationJournal, type MigrationJournalState } from '../repositories/migration-journal';
-import { createUuid } from '../utils/ids';
-import { prepareNewTask, type NewTaskInput } from './task-service';
-import { planTaskDeletion } from './deletion-service';
-import {
-	changeCustomFieldKey,
-	planProjectCodeMigration,
-	prepareProjectTransfer,
-	refreshRelationKeys,
-	resolveMigrationPath,
-	type TransferMapping,
-} from './migration-service';
+import { type NewTaskInput } from './task-service';
+import { type TransferMapping } from './migration-service';
 import {
 	loadOrMigrateConfiguration,
 	type ConfigurationSnapshot,
 	type ConfigurationStore,
 } from '../settings/configuration-store';
-import { moveTagStylePath, renameTagPath, renameTagStyles, repairMalformedTagStyles } from './tag-service';
+import { repairMalformedTagStyles } from './tag-service';
 import { applyConfigurationTemplate, applyConfigurationTemplates } from './template-service';
 import { normalizeDashboardLayout } from '../views/dashboard-layout';
 import { normalizeConfigurationSnapshot } from '../settings/configuration-store';
 import { normalizeProjectViewDisplay, type ProjectViewDisplaySettings } from '../views/task-display-settings';
-import { removeTagGroupAssignments, renameTagGroupAssignments, rootTagPath } from './tag-group-service';
 import { normalizePersonalDashboardSettings, type PersonalDashboardSettings } from '../views/personal-dashboard-settings';
 import { mapConcurrent } from '../utils/async-pool';
-import { createEmbeddedSubtask as prepareEmbeddedSubtask, type EmbeddedSubtaskInput, updateEmbeddedSubtask as patchEmbeddedSubtask } from './embedded-subtask-service';
-import { parseEmbeddedSubtasks, removeEmbeddedSubtask, upsertEmbeddedSubtask } from '../markdown/embedded-subtask-parser';
+import type { EmbeddedSubtaskInput } from './embedded-subtask-service';
 import { normalizeTaskMetadataSettings, type TaskMetadataSettings } from '../settings/task-metadata-settings';
-import { collectPeopleFromMetadata, normalizePeopleSourceSettings, reconcileSourcedPeople, type PeopleSourceSettings } from './people-source';
+import { normalizePeopleSourceSettings, type PeopleSourceSettings } from './people-source';
 import { normalizeNativeSidebarSettings, type NativeSidebarSettings, type PropertyGroupPresentation, type PropertyPresentation } from '../settings/native-sidebar-settings';
-import { normalizePersonMetadataFields, normalizePersonMetadataValue, normalizePersonNamePresentation } from './person-metadata';
 import type { PersonNamePresentation } from '../domain/types';
-import { DEFAULT_PERSON_DIRECTORY, personMarkdownPath, serializePersonMarkdown } from '../markdown/person-parser';
-import { personDeletionBlockReason } from './person-deletion';
 import { ConfigurationWriteQueue } from '../settings/configuration-write-queue';
 import { DashboardVaultCache } from './dashboard-vault-cache';
 import {
@@ -67,9 +53,20 @@ import {
 	createProjectManagerConfigurationSnapshot,
 } from './project-manager-configuration';
 
+import { TagManagerService } from './tag-manager-service';
+import { PersonnelService } from './personnel-service';
+import { MigrationManagerService } from './migration-manager-service';
+import { TaskCrudService } from './task-crud-service';
+import { createDefaultConfiguration, createDefaultProject } from './default-configuration';
+
 export const DEFAULT_GLOBAL_CONFIG_PATH = '项目管理/全局配置.md';
 
 export class ProjectManager {
+	readonly tagManager: TagManagerService;
+	readonly personnel: PersonnelService;
+	readonly migrations: MigrationManagerService;
+	readonly taskCrud: TaskCrudService;
+
 	readonly index = new TaskIndex();
 	readonly dashboardVaultCache: DashboardVaultCache;
 	globalConfig!: GlobalConfig;
@@ -88,11 +85,11 @@ export class ProjectManager {
 	nativeSidebarSettings: NativeSidebarSettings = normalizeNativeSidebarSettings();
 	dataIssues: PathIssue[] = [];
 	pendingMigrations: MigrationJournalState[] = [];
-	private readonly vault: ObsidianVaultAdapter;
-	private readonly taskRepository: TaskRepository;
+	readonly vault: ObsidianVaultAdapter;
+	readonly taskRepository: TaskRepository;
 	private listeners = new Set<() => void>();
 	private protectedByPath = new Map<string, ProtectedIdentity>();
-	private authorizedIdentities = new Map<string, ProtectedIdentity>();
+	authorizedIdentities = new Map<string, ProtectedIdentity>();
 	private baseDataIssues: PathIssue[] = [];
 	private taskIssuesByPath = new Map<string, PathIssue[]>();
 	private dashboardFileOpenSave: Promise<void> = Promise.resolve();
@@ -109,6 +106,10 @@ export class ProjectManager {
 		this.taskRepository = new TaskRepository(this.vault);
 		this.dashboardVaultCache = new DashboardVaultCache(app.vault);
 		this.configurationWrites = new ConfigurationWriteQueue((snapshot) => this.configStore.save(snapshot));
+		this.tagManager = new TagManagerService(this);
+		this.personnel = new PersonnelService(this);
+		this.migrations = new MigrationManagerService(this);
+		this.taskCrud = new TaskCrudService(this);
 	}
 
 	async initialize(): Promise<void> {
@@ -264,7 +265,7 @@ export class ProjectManager {
 
 	private async loadLegacyConfiguration() {
 		if (!(await this.vault.exists(this.legacyGlobalConfigPath))) {
-			return { snapshot: defaultConfiguration(), cleanup: async () => undefined };
+			return { snapshot: createDefaultConfiguration(), cleanup: async () => undefined };
 		}
 		const globalRepository = new GlobalConfigRepository(this.vault, this.legacyGlobalConfigPath);
 		const globalConfig = await globalRepository.read();
@@ -339,26 +340,11 @@ export class ProjectManager {
 	}
 
 	async savePeopleSourceSettings(settings: PeopleSourceSettings): Promise<void> {
-		this.peopleSourceSettings = normalizePeopleSourceSettings(settings);
-		await this.refreshPeopleFromMetadata();
+		return this.personnel.savePeopleSourceSettings(settings);
 	}
 
 	async refreshPeopleFromMetadata(preferred?: Person): Promise<void> {
-		let sourced = collectPeopleFromMetadata(this.app.vault.getMarkdownFiles().map((file) => ({
-			path: file.path,
-			basename: file.basename,
-			frontmatter: this.app.metadataCache.getFileCache(file)?.frontmatter,
-		})), this.peopleSourceSettings, this.globalConfig.personMetadataFields);
-		if (preferred?.sourcePath) {
-			sourced = [...sourced.filter((person) => person.sourcePath !== preferred.sourcePath), preferred];
-		}
-		this.globalConfig.people = reconcileSourcedPeople(
-			this.globalConfig.people,
-			sourced,
-			this.globalConfig.currentUserId,
-		);
-		await this.persistConfiguration();
-		for (const listener of this.listeners) listener();
+		return this.personnel.refreshPeopleFromMetadata(preferred);
 	}
 
 	async saveNativeSidebarSettings(settings: NativeSidebarSettings): Promise<void> {
@@ -409,14 +395,18 @@ export class ProjectManager {
 		}
 	}
 
-	private async persistConfiguration(): Promise<void> {
+	async persistConfiguration(): Promise<void> {
 		await this.configurationWrites.enqueue(this.snapshot());
 	}
 
-	private replaceProject(project: ProjectConfig): void {
+	replaceProject(project: ProjectConfig): void {
 		const index = this.projects.findIndex((item) => item.uid === project.uid);
 		if (index < 0) this.projects.push(structuredClone(project));
 		else this.projects[index] = structuredClone(project);
+	}
+
+	notifyListeners(): void {
+		for (const listener of this.listeners) listener();
 	}
 
 	onChange(listener: () => void): () => void {
@@ -429,7 +419,7 @@ export class ProjectManager {
 		if (this.projects.some((project) => project.code === normalizedCode)) {
 			throw new Error('项目代码已存在。');
 		}
-		const project = defaultProject(
+		const project = createDefaultProject(
 			normalizedCode,
 			name.trim(),
 			`${this.globalConfig.defaultTaskDirectory}/${normalizedCode}`,
@@ -549,108 +539,11 @@ export class ProjectManager {
 		fieldId: string,
 		newKey: string,
 	): Promise<void> {
-		const field = project.customFields.find((item) => item.id === fieldId);
-		if (!field) throw new Error('自定义字段不存在。');
-		if (field.key === newKey) return;
-		const entries = this.index.validTasks().filter((task) => task.project.uid === project.uid);
-		const changed = changeCustomFieldKey(entries.map((entry) => entry.document), field.key, newKey);
-		const journal = new MigrationJournal(this.vault, createUuid());
-		await journal.create(
-			'custom-field-key',
-			entries.map((entry, index) => ({
-				uid: entry.document.metadata.uid,
-				oldPath: entry.path,
-				newPath: entry.path,
-				oldKey: entry.document.metadata.key,
-				newKey: entry.document.metadata.key,
-				projectUid: project.uid,
-				document: changed[index]!,
-				baseline: entry.document,
-				removedCustomKeys: [field.key],
-			})),
-			{ type: 'custom-field-key', projectUid: project.uid, fieldId, newKey },
-		);
-		for (const [index, document] of changed.entries()) {
-			const entry = entries[index]!;
-			await this.taskRepository.save(entry.path, document, project);
-			await journal.complete(entry.document.metadata.uid);
-		}
-		field.key = newKey;
-		this.replaceProject(project);
-		await this.persistConfiguration();
-		await journal.completeFinalization();
-		await this.reload();
+		return this.migrations.renameCustomFieldKey(project, fieldId, newKey);
 	}
 
 	async changeProjectCode(project: ProjectConfig, newCode: string): Promise<void> {
-		const entries = this.index.validTasks().filter((task) => task.project.uid === project.uid);
-		const otherKeys = new Set(this.index.validTasks().filter((task) => task.project.uid !== project.uid).map((task) => task.document.metadata.key));
-		const plan = planProjectCodeMigration(project, entries, newCode, otherKeys);
-		if (plan.issues.length > 0) throw new Error(plan.issues[0]!.message);
-		for (const change of plan.changes) {
-			if (change.oldPath !== change.newPath && await this.vault.exists(change.newPath)) {
-				throw new Error(`目标文件已存在：${change.newPath}`);
-			}
-		}
-		const keyByUid = new Map(plan.changes.map((change) => [change.document.metadata.uid, change.newKey]));
-		const externalEntries = this.index.validTasks().filter((task) => task.project.uid !== project.uid && task.document.relations.some((relation) => keyByUid.has(relation.targetUid)));
-		const refreshed = refreshRelationKeys(externalEntries.map((entry) => entry.document), keyByUid);
-		const nextProject = structuredClone(project);
-		const oldCode = nextProject.code;
-		nextProject.code = newCode.trim().toUpperCase();
-		if (nextProject.taskDirectory.endsWith(`/${oldCode}`)) {
-			nextProject.taskDirectory = `${nextProject.taskDirectory.slice(0, -oldCode.length)}${nextProject.code}`;
-		}
-		const oldPath = `config:${project.uid}`;
-		const newPath = oldPath;
-		const entriesByUid = new Map(entries.map((entry) => [entry.document.metadata.uid, entry]));
-		const journal = new MigrationJournal(this.vault, createUuid());
-		await journal.create(
-			'project-code',
-			[
-				...plan.changes.map((change) => ({
-					uid: change.document.metadata.uid,
-					oldPath: change.oldPath,
-					newPath: change.newPath,
-					oldKey: change.oldKey,
-					newKey: change.newKey,
-					projectUid: project.uid,
-					document: change.document,
-					baseline: entriesByUid.get(change.document.metadata.uid)!.document,
-				})),
-				...externalEntries.map((entry, index) => ({
-					uid: entry.document.metadata.uid,
-					oldPath: entry.path,
-					newPath: entry.path,
-					oldKey: entry.document.metadata.key,
-					newKey: entry.document.metadata.key,
-					projectUid: entry.project.uid,
-					document: refreshed[index]!,
-					baseline: entry.document,
-				})),
-			],
-			{ type: 'project-code', projectUid: project.uid, oldPath, newPath, project: nextProject },
-		);
-		for (const change of plan.changes) {
-			this.authorizedIdentities.set(change.newPath, {
-				uid: change.document.metadata.uid,
-				key: change.document.metadata.key,
-			});
-			if (change.oldPath !== change.newPath) {
-				await this.taskRepository.rename(change.oldPath, change.newPath);
-			}
-			await this.taskRepository.save(change.newPath, change.document, project);
-			await journal.complete(change.document.metadata.uid);
-		}
-		for (const [index, document] of refreshed.entries()) {
-			const entry = externalEntries[index]!;
-			await this.taskRepository.save(entry.path, document, entry.project);
-			await journal.complete(entry.document.metadata.uid);
-		}
-		this.replaceProject(nextProject);
-		await this.persistConfiguration();
-		await journal.completeFinalization();
-		await this.reload();
+		return this.migrations.changeProjectCode(project, newCode);
 	}
 
 	async transferTask(
@@ -658,59 +551,7 @@ export class ProjectManager {
 		target: ProjectConfig,
 		mapping: TransferMapping,
 	): Promise<void> {
-		if (entry.document.relations.some((relation) => relation.type === 'parent') || this.index.childrenOf(entry.document.metadata.uid).length > 0) {
-			throw new Error('存在父子关系的任务必须先解除关系或迁移整棵任务树。');
-		}
-		const existingKeys = new Set(this.index.validTasks().map((task) => task.document.metadata.key));
-		const prepared = prepareProjectTransfer(entry.document, target, mapping, existingKeys);
-		this.authorizedIdentities.set(prepared.path, {
-			uid: prepared.document.metadata.uid,
-			key: prepared.document.metadata.key,
-		});
-		if (await this.vault.exists(prepared.path)) throw new Error(`目标文件已存在：${prepared.path}`);
-		const keyByUid = new Map([[entry.document.metadata.uid, prepared.document.metadata.key]]);
-		const externalEntries = this.index.validTasks().filter((task) => task.document.metadata.uid !== entry.document.metadata.uid && task.document.relations.some((relation) => keyByUid.has(relation.targetUid)));
-		const refreshed = refreshRelationKeys(externalEntries.map((task) => task.document), keyByUid);
-		const journal = new MigrationJournal(this.vault, createUuid());
-		await journal.create('task-transfer', [
-			{
-				uid: entry.document.metadata.uid,
-				oldPath: entry.path,
-				newPath: prepared.path,
-				oldKey: entry.document.metadata.key,
-				newKey: prepared.document.metadata.key,
-				projectUid: target.uid,
-				document: prepared.document,
-				baseline: entry.document,
-				details: {
-					discardedCustomFields: Object.fromEntries(
-						Object.entries(entry.document.metadata.custom).filter(([key]) => !(key in mapping.customFieldMappings)),
-					),
-				},
-			},
-			...externalEntries.map((task, index) => ({
-				uid: task.document.metadata.uid,
-				oldPath: task.path,
-				newPath: task.path,
-				oldKey: task.document.metadata.key,
-				newKey: task.document.metadata.key,
-				projectUid: task.project.uid,
-				document: refreshed[index]!,
-				baseline: task.document,
-			})),
-		]);
-		target.nextNumber = prepared.nextNumber;
-		this.replaceProject(target);
-		await this.persistConfiguration();
-		await this.taskRepository.rename(entry.path, prepared.path);
-		await this.taskRepository.save(prepared.path, prepared.document, target);
-		await journal.complete(entry.document.metadata.uid);
-		for (const [index, document] of refreshed.entries()) {
-			const external = externalEntries[index]!;
-			await this.taskRepository.save(external.path, document, external.project);
-			await journal.complete(external.document.metadata.uid);
-		}
-		await this.reload();
+		return this.migrations.transferTask(entry, target, mapping);
 	}
 
 	async transferTaskTree(
@@ -718,173 +559,31 @@ export class ProjectManager {
 		target: ProjectConfig,
 		mapping: TransferMapping,
 	): Promise<void> {
-		const entries = collectTaskTree(entry.document.metadata.uid, this.index);
-		if (entries.length === 0) throw new Error('找不到任务树。');
-		const existingKeys = new Set(this.index.validTasks().map((task) => task.document.metadata.key));
-		let nextNumber = target.nextNumber;
-		const prepared = entries.map((item) => {
-			const result = prepareProjectTransfer(item.document, target, mapping, existingKeys, nextNumber);
-			nextNumber = result.nextNumber;
-			existingKeys.add(result.document.metadata.key);
-			return { entry: item, ...result };
-		});
-		const keyByUid = new Map(prepared.map((item) => [item.document.metadata.uid, item.document.metadata.key]));
-		const refreshed = refreshRelationKeys(prepared.map((item) => item.document), keyByUid);
-		const movedUids = new Set(prepared.map((item) => item.document.metadata.uid));
-		const externalEntries = this.index.validTasks().filter((task) => !movedUids.has(task.document.metadata.uid) && task.document.relations.some((relation) => keyByUid.has(relation.targetUid)));
-		const refreshedExternal = refreshRelationKeys(externalEntries.map((task) => task.document), keyByUid);
-		for (const item of prepared) {
-			if (item.entry.path !== item.path && await this.vault.exists(item.path)) throw new Error(`目标文件已存在：${item.path}`);
-		}
-		const journal = new MigrationJournal(this.vault, createUuid());
-		await journal.create('task-tree-transfer', [
-			...prepared.map((item, index) => ({
-				uid: item.document.metadata.uid,
-				oldPath: item.entry.path,
-				newPath: item.path,
-				oldKey: item.entry.document.metadata.key,
-				newKey: item.document.metadata.key,
-				projectUid: target.uid,
-				document: refreshed[index]!,
-				baseline: item.entry.document,
-				details: {
-					discardedCustomFields: Object.fromEntries(
-						Object.entries(item.entry.document.metadata.custom).filter(([key]) => !(key in mapping.customFieldMappings)),
-					),
-				},
-			})),
-			...externalEntries.map((task, index) => ({
-				uid: task.document.metadata.uid,
-				oldPath: task.path,
-				newPath: task.path,
-				oldKey: task.document.metadata.key,
-				newKey: task.document.metadata.key,
-				projectUid: task.project.uid,
-				document: refreshedExternal[index]!,
-				baseline: task.document,
-			})),
-		]);
-		target.nextNumber = nextNumber;
-		this.replaceProject(target);
-		await this.persistConfiguration();
-		for (const [index, item] of prepared.entries()) {
-			this.authorizedIdentities.set(item.path, {
-				uid: refreshed[index]!.metadata.uid,
-				key: refreshed[index]!.metadata.key,
-			});
-			await this.taskRepository.rename(item.entry.path, item.path);
-			await this.taskRepository.save(item.path, refreshed[index]!, target);
-			await journal.complete(item.document.metadata.uid);
-		}
-		for (const [index, document] of refreshedExternal.entries()) {
-			const external = externalEntries[index]!;
-			await this.taskRepository.save(external.path, document, external.project);
-			await journal.complete(external.document.metadata.uid);
-		}
-		await this.reload();
+		return this.migrations.transferTaskTree(entry, target, mapping);
 	}
 
 	async createTask(input: Omit<NewTaskInput, 'globalConfig'>): Promise<string> {
-		const existingKeys = new Set(
-			this.index.validTasks().map((task) => task.document.metadata.key),
-		);
-		const prepared = prepareNewTask(
-			{ ...input, globalConfig: this.globalConfig },
-			existingKeys,
-		);
-		input.project.nextNumber = prepared.nextNumber;
-		this.replaceProject(input.project);
-		await this.persistConfiguration();
-		await this.taskRepository.create(prepared.path, prepared.document);
-		await this.reload();
-		return prepared.path;
+		return this.taskCrud.create(input);
 	}
 
 	async saveTask(entry: IndexedTask, document: TaskDocument): Promise<void> {
-		const validation = validateTaskMetadata(document.metadata);
-		const referenceIssues = validateTaskReferences(
-			document.metadata,
-			entry.project,
-			new Set(this.globalConfig.people.map((person) => person.id)),
-		);
-		const issues = [...validation.issues, ...referenceIssues];
-		if (issues.length > 0) throw new Error(issues.map((issue) => issue.message).join('\n'));
-		await this.taskRepository.save(entry.path, document, entry.project, entry.document);
-		await this.reload();
+		return this.taskCrud.save(entry, document);
 	}
 
 	async savePerson(person: Person): Promise<void> {
-		const name = person.name.trim();
-		if (!name) throw new Error('人员姓名不能为空。');
-		const metadata = Object.fromEntries(this.globalConfig.personMetadataFields.flatMap((field) => {
-			const value = normalizePersonMetadataValue(field, person.metadata?.[field.key]);
-			return value === undefined ? [] : [[field.key, value]];
-		}));
-		const folder = this.peopleSourceSettings.folder || DEFAULT_PERSON_DIRECTORY;
-		let sourcePath = person.sourcePath ?? personMarkdownPath(folder, name);
-		if (!person.sourcePath && await this.vault.exists(sourcePath)) {
-			sourcePath = personMarkdownPath(folder, `${name} ${person.id.slice(0, 8)}`);
-		}
-		const next = { ...structuredClone(person), name, metadata, sourcePath };
-		await this.vault.ensureFolder(sourcePath.split('/').slice(0, -1).join('/'));
-		if (await this.vault.exists(sourcePath)) {
-			await this.vault.process(sourcePath, (source) => serializePersonMarkdown(
-				next, this.peopleSourceSettings, this.globalConfig.personMetadataFields, source,
-			));
-		} else {
-			await this.vault.create(sourcePath, serializePersonMarkdown(
-				next, this.peopleSourceSettings, this.globalConfig.personMetadataFields,
-			));
-		}
-		if (!(await this.vault.exists(sourcePath))) throw new Error(`人员文件写入失败：${sourcePath}`);
-		const index = this.globalConfig.people.findIndex((item) => item.id === next.id);
-		if (index < 0) this.globalConfig.people.push(next);
-		else this.globalConfig.people[index] = next;
-		if (this.peopleSourceSettings.enabled) await this.refreshPeopleFromMetadata(next);
-		else {
-			await this.persistConfiguration();
-			for (const listener of this.listeners) listener();
-		}
+		return this.personnel.savePerson(person);
 	}
 
 	async deletePerson(personId: string): Promise<void> {
-		const person = this.globalConfig.people.find((item) => item.id === personId);
-		if (!person) throw new Error('人员不存在或已被删除。');
-		const blockReason = personDeletionBlockReason(
-			personId,
-			this.globalConfig.currentUserId,
-			this.index.validTasks().map((task) => task.document),
-		);
-		if (blockReason) throw new Error(blockReason);
-		if (person.sourcePath && await this.vault.exists(person.sourcePath)) {
-			await this.vault.trash(person.sourcePath);
-		}
-		this.globalConfig.people = this.globalConfig.people.filter((item) => item.id !== personId);
-		await this.persistConfiguration();
-		for (const listener of this.listeners) listener();
+		return this.personnel.deletePerson(personId);
 	}
 
 	async savePersonNamePresentation(presentation: PersonNamePresentation): Promise<void> {
-		this.globalConfig.personNamePresentation = normalizePersonNamePresentation(presentation);
-		await this.persistConfiguration();
-		for (const listener of this.listeners) listener();
+		return this.personnel.savePersonNamePresentation(presentation);
 	}
 
 	async savePersonMetadataFields(fields: readonly PersonMetadataFieldDefinition[]): Promise<void> {
-		const normalized = normalizePersonMetadataFields(fields);
-		const previousById = new Map(this.globalConfig.personMetadataFields.map((field) => [field.id, field]));
-		for (const field of normalized) {
-			const previous = previousById.get(field.id);
-			if (!previous || previous.key === field.key) continue;
-			for (const person of this.globalConfig.people) {
-				if (!person.metadata || person.metadata[previous.key] === undefined || person.metadata[field.key] !== undefined) continue;
-				person.metadata[field.key] = person.metadata[previous.key];
-				delete person.metadata[previous.key];
-			}
-		}
-		this.globalConfig.personMetadataFields = normalized;
-		await this.persistConfiguration();
-		for (const listener of this.listeners) listener();
+		return this.personnel.savePersonMetadataFields(fields);
 	}
 
 	async addDashboardCheckIn(cardId: string, date: string, timestamp = new Date().toISOString()): Promise<void> {
@@ -895,302 +594,71 @@ export class ProjectManager {
 	}
 
 	embeddedSubtasks(entry: IndexedTask): EmbeddedSubtask[] {
-		return parseEmbeddedSubtasks(entry.document.subtasks ?? '').subtasks;
+		return this.taskCrud.embeddedSubtasks(entry);
 	}
 
 	async createEmbeddedSubtask(entry: IndexedTask, input: EmbeddedSubtaskInput): Promise<EmbeddedSubtask> {
-		const subtask = prepareEmbeddedSubtask(input);
-		const document = structuredClone(entry.document);
-		document.subtasks = upsertEmbeddedSubtask(document.subtasks ?? '', subtask);
-		await this.saveTask(entry, document);
-		return subtask;
+		return this.taskCrud.createEmbeddedSubtask(entry, input);
 	}
 
 	async updateEmbeddedSubtask(entry: IndexedTask, subtask: EmbeddedSubtask): Promise<void> {
-		const current = this.embeddedSubtasks(entry).find((item) => item.id === subtask.id);
-		if (!current) throw new Error('子任务不存在或已被删除。');
-		const next = patchEmbeddedSubtask(current, subtask);
-		const document = structuredClone(entry.document);
-		document.subtasks = upsertEmbeddedSubtask(document.subtasks ?? '', next);
-		await this.saveTask(entry, document);
+		return this.taskCrud.updateEmbeddedSubtask(entry, subtask);
 	}
 
 	async toggleEmbeddedSubtask(entry: IndexedTask, subtaskId: string, completed: boolean): Promise<void> {
-		const current = this.embeddedSubtasks(entry).find((item) => item.id === subtaskId);
-		if (!current) throw new Error('子任务不存在或已被删除。');
-		await this.updateEmbeddedSubtask(entry, { ...current, completed });
+		return this.taskCrud.toggleEmbeddedSubtask(entry, subtaskId, completed);
 	}
 
 	async deleteEmbeddedSubtask(entry: IndexedTask, subtaskId: string): Promise<void> {
-		const document = structuredClone(entry.document);
-		document.subtasks = removeEmbeddedSubtask(document.subtasks ?? '', subtaskId);
-		await this.saveTask(entry, document);
+		return this.taskCrud.deleteEmbeddedSubtask(entry, subtaskId);
 	}
 
 	async renameTag(oldPath: string, newPath: string): Promise<void> {
-		const entries = this.index.validTasks().filter((task) =>
-			task.document.metadata.tags.some((tag) => tag === oldPath || tag.startsWith(`${oldPath}/`)),
-		);
-		const changed = entries.map((entry) => {
-			const document = structuredClone(entry.document);
-			document.metadata.tags = renameTagPath(document.metadata.tags, oldPath, newPath);
-			return document;
-		});
-		const journal = new MigrationJournal(this.vault, createUuid());
-		await journal.create('tag-rename', entries.map((entry, index) => ({
-			uid: entry.document.metadata.uid,
-			oldPath: entry.path,
-			newPath: entry.path,
-			oldKey: entry.document.metadata.key,
-			newKey: entry.document.metadata.key,
-			projectUid: entry.project.uid,
-			document: changed[index]!,
-			baseline: entry.document,
-		})));
-		for (const [index, entry] of entries.entries()) {
-			await this.taskRepository.save(entry.path, changed[index]!, entry.project, entry.document);
-			await journal.complete(entry.document.metadata.uid);
-		}
-		this.tagOrder = renameTagPath(this.tagOrder, oldPath, newPath);
-		this.tagStyles = renameTagStyles(this.tagStyles, oldPath, newPath);
-		this.tagGroupAssignments = renameTagGroupAssignments(this.tagGroupAssignments, oldPath, newPath);
-		await this.persistConfiguration();
-		await this.reload();
+		return this.tagManager.renameTag(oldPath, newPath);
 	}
 
 	async saveTagOrder(order: readonly string[]): Promise<void> {
-		this.tagOrder = [...new Set(order)];
-		await this.persistConfiguration();
-		for (const listener of this.listeners) listener();
+		return this.tagManager.saveTagOrder(order);
 	}
 
 	async saveTagStyle(tagPath: string, style: TagStyle): Promise<void> {
-		const normalizedPath = tagPath.trim().replace(/^#|\/$/gu, '');
-		if (!normalizedPath) throw new Error('标签路径不能为空。');
-		const normalizedStyle = {
-			icon: style.icon?.trim() || undefined,
-			color: style.color?.trim() || undefined,
-		};
-		if (!normalizedStyle.icon && !normalizedStyle.color) delete this.tagStyles[normalizedPath];
-		else this.tagStyles[normalizedPath] = normalizedStyle;
-		await this.persistConfiguration();
-		for (const listener of this.listeners) listener();
+		return this.tagManager.saveTagStyle(tagPath, style);
 	}
 
 	async moveTagStyle(oldPath: string, newPath: string): Promise<void> {
-		this.tagStyles = moveTagStylePath(this.tagStyles, oldPath, newPath);
-		await this.persistConfiguration();
-		for (const listener of this.listeners) listener();
+		return this.tagManager.moveTagStyle(oldPath, newPath);
 	}
 
 	async saveTagGroup(group: TagGroup): Promise<void> {
-		const next = { ...structuredClone(group), name: group.name.trim() };
-		if (!next.name) throw new Error('标签分组名称不能为空。');
-		const index = this.tagGroups.findIndex((item) => item.id === next.id);
-		if (index < 0) this.tagGroups.push(next);
-		else this.tagGroups[index] = next;
-		this.tagGroups = this.tagGroups
-			.sort((left, right) => left.order - right.order)
-			.map((item, order) => ({ ...item, order }));
-		await this.persistConfiguration();
-		for (const listener of this.listeners) listener();
+		return this.tagManager.saveTagGroup(group);
 	}
 
 	async deleteTagGroup(groupId: string): Promise<void> {
-		this.tagGroups = this.tagGroups.filter((group) => group.id !== groupId).map((group, order) => ({ ...group, order }));
-		this.tagGroupAssignments = removeTagGroupAssignments(this.tagGroupAssignments, groupId);
-		await this.persistConfiguration();
-		for (const listener of this.listeners) listener();
+		return this.tagManager.deleteTagGroup(groupId);
 	}
 
 	async assignTagGroup(tagPath: string, groupId: string | null): Promise<void> {
-		const root = rootTagPath(tagPath);
-		if (groupId && !this.tagGroups.some((group) => group.id === groupId)) throw new Error('标签分组不存在。');
-		if (groupId) this.tagGroupAssignments[root] = groupId;
-		else delete this.tagGroupAssignments[root];
-		await this.persistConfiguration();
-		for (const listener of this.listeners) listener();
+		return this.tagManager.assignTagGroup(tagPath, groupId);
 	}
 
 	orderTags(tags: readonly string[]): string[] {
-		const rank = new Map(this.tagOrder.map((tag, index) => [tag, index]));
-		return [...tags].sort((left, right) => {
-			const leftRank = rank.get(left) ?? Number.MAX_SAFE_INTEGER;
-			const rightRank = rank.get(right) ?? Number.MAX_SAFE_INTEGER;
-			return leftRank === rightRank ? left.localeCompare(right, 'zh-CN') : leftRank - rightRank;
-		});
+		return this.tagManager.orderTags(tags);
 	}
 
 	async deleteTask(entry: IndexedTask): Promise<void> {
-		const plan = planTaskDeletion(entry, this.index);
-		if (plan.issues.length > 0) throw new Error(plan.issues[0]!.message);
-		for (const edit of plan.relatedEdits) {
-			await this.taskRepository.save(edit.path, edit.document, edit.project);
-		}
-		await this.taskRepository.trash(entry.path);
-		await this.reload();
+		return this.taskCrud.delete(entry);
 	}
 
 	async repairIssue(path: string, code: string): Promise<void> {
-		const entry = this.index.validTasks().find((task) => task.path === path);
-		if (entry && code === 'filename-key-mismatch') {
-			const directory = path.split('/').slice(0, -1).join('/');
-			await this.taskRepository.rename(path, `${directory}/${entry.document.metadata.key}.md`);
-		} else if (entry && code === 'relation-target-missing') {
-			const document = structuredClone(entry.document);
-			document.relations = document.relations.filter((relation) => this.index.get(relation.targetUid));
-			await this.taskRepository.save(path, document, entry.project);
-		} else if (code === 'duplicate-key' || code === 'duplicate-uuid' || code === 'missing-section') {
-			const parsed = parseTaskMarkdown(await this.vault.read(path), {
-				customFieldKeys: new Set(this.projects.flatMap((project) => project.customFields.map((field) => field.key))),
-			});
-			if (!parsed.document) throw new Error('任务文件无法解析。');
-			const project = this.projects.find((item) => item.uid === parsed.document?.metadata.projectUid);
-			if (!project) throw new Error('找不到任务所属项目。');
-			if (code === 'duplicate-uuid') {
-				parsed.document.metadata.uid = createUuid();
-				this.authorizedIdentities.set(path, {
-					uid: parsed.document.metadata.uid,
-					key: parsed.document.metadata.key,
-				});
-			}
-			if (code === 'duplicate-key') {
-				const keys = new Set<string>();
-				for (const taskPath of await this.taskRepository.listPaths()) {
-					const task = parseTaskMarkdown(await this.vault.read(taskPath)).document;
-					if (task) keys.add(task.metadata.key);
-				}
-				let number = project.nextNumber;
-				while (keys.has(`${project.code}-${number}`)) number += 1;
-				parsed.document.metadata.key = `${project.code}-${number}`;
-				project.nextNumber = number + 1;
-				this.replaceProject(project);
-				await this.persistConfiguration();
-				const directory = path.split('/').slice(0, -1).join('/');
-				const nextPath = `${directory}/${parsed.document.metadata.key}.md`;
-				this.authorizedIdentities.set(nextPath, {
-					uid: parsed.document.metadata.uid,
-					key: parsed.document.metadata.key,
-				});
-				await this.taskRepository.rename(path, nextPath);
-				path = nextPath;
-			}
-			await this.taskRepository.save(path, parsed.document, project);
-		} else {
-			throw new Error('该问题需要在 Markdown 中手动修复。');
-		}
-		await this.reload();
+		return this.taskCrud.repairIssue(path, code);
 	}
 
 	async resumeMigration(id: string): Promise<void> {
-		const state = (await MigrationJournal.listIncomplete(this.vault)).find((item) => item.id === id);
-		if (!state) throw new Error('找不到未完成的迁移。');
-		const journal = new MigrationJournal(this.vault, id);
-		const projectsToSave = new Map<string, ProjectConfig>();
-		for (const item of state.items.filter((candidate) => !candidate.completed)) {
-			if (!item.document || !item.baseline || !item.projectUid) {
-				throw new Error('该迁移日志来自旧版本，缺少安全继续所需的任务快照，请手动检查文件。');
-			}
-			const project = this.projects.find((candidate) => candidate.uid === item.projectUid);
-			if (!project) throw new Error(`迁移目标项目不存在：${item.projectUid}`);
-			const match = item.newKey?.match(new RegExp(`^${project.code}-(\\d+)$`, 'u'));
-			if (match) {
-				const nextNumber = Number(match[1]) + 1;
-				if (nextNumber > project.nextNumber) {
-					project.nextNumber = nextNumber;
-					projectsToSave.set(project.uid, project);
-				}
-			}
-		}
-		for (const project of projectsToSave.values()) this.replaceProject(project);
-		if (projectsToSave.size > 0) await this.persistConfiguration();
-		for (const item of state.items.filter((candidate) => !candidate.completed)) {
-			const project = this.projects.find((candidate) => candidate.uid === item.projectUid)!;
-			const oldExists = await this.vault.exists(item.oldPath);
-			const newExists = item.oldPath === item.newPath ? oldExists : await this.vault.exists(item.newPath);
-			const action = resolveMigrationPath(item.oldPath, item.newPath, oldExists, newExists);
-			this.authorizedIdentities.set(item.newPath, {
-				uid: item.document!.metadata.uid,
-				key: item.document!.metadata.key,
-			});
-			if (action.rename) await this.taskRepository.rename(action.path, item.newPath);
-			await this.taskRepository.save(item.newPath, structuredClone(item.document!), project, item.baseline);
-			await journal.complete(item.uid);
-		}
-		if (state.finalization && state.finalized !== true) {
-			const finalization = state.finalization;
-			if (finalization.type === 'custom-field-key') {
-				const project = this.projects.find((candidate) => candidate.uid === finalization.projectUid);
-				const field = project?.customFields.find((candidate) => candidate.id === finalization.fieldId);
-				if (!project || !field) throw new Error('无法完成自定义字段键迁移：项目或字段不存在。');
-				field.key = finalization.newKey;
-				this.replaceProject(project);
-				await this.persistConfiguration();
-			} else {
-				this.replaceProject(finalization.project);
-				await this.persistConfiguration();
-			}
-			await journal.completeFinalization();
-		}
-		await this.reload();
+		return this.migrations.resumeMigration(id);
 	}
 
 	async openTask(path: string): Promise<void> {
 		const file = this.app.vault.getFileByPath(path);
 		if (file) await this.app.workspace.getLeaf(false).openFile(file);
 	}
-}
-
-function defaultConfiguration(): ConfigurationSnapshot {
-	const userId = createUuid();
-	return {
-		globalConfig: {
-			kind: 'global-config', schema: 1,
-			projectConfigDirectory: 'plugin-data',
-			defaultTaskDirectory: '项目管理/任务',
-			currentUserId: userId,
-			people: [{ id: userId, name: '默认用户', active: true }],
-			personMetadataFields: [],
-		},
-		projects: [],
-		tagOrder: [],
-		tagStyles: {},
-		tagGroups: [],
-		tagGroupAssignments: {},
-		taskTemplates: [],
-		savedProjectFilters: [],
-		personalDashboardLayout: [],
-		personalDashboardSettings: normalizePersonalDashboardSettings(),
-		projectViewDisplay: normalizeProjectViewDisplay(),
-	};
-}
-
-function defaultProject(code: string, name: string, taskDirectory: string): ProjectConfig {
-	return {
-		kind: 'project', schema: 1, uid: createUuid(), code, name, active: true,
-		taskDirectory, groupByMonth: true, nextNumber: 1,
-		taskTypes: [
-			{ id: 'task', name: '任务', icon: 'circle-check', color: '#3b82f6', marker: 'circle-check', titleColor: '#2563eb', active: true, template: null },
-			{ id: 'bug', name: '缺陷', icon: 'bug', color: '#ef4444', marker: 'bug', titleColor: '#dc2626', active: true, template: null },
-			{ id: 'requirement', name: '需求', icon: 'lightbulb', color: '#f59e0b', marker: '💡', titleColor: '#b45309', active: true, template: null },
-		],
-		customFields: [],
-		workflow: {
-			initialStatusId: 'waiting',
-			statuses: [
-				{ id: 'waiting', name: '待处理', category: 'todo', result: null, active: true },
-				{ id: 'doing', name: '进行中', category: 'in_progress', result: null, active: true },
-				{ id: 'completed', name: '已完成', category: 'done', result: 'completed', active: true },
-				{ id: 'cancelled', name: '已取消', category: 'done', result: 'terminated', active: true },
-			],
-			transitions: [
-				{ id: 'start', name: '开始处理', from: 'waiting', to: 'doing' },
-				{ id: 'finish', name: '完成', from: 'doing', to: 'completed' },
-				{ id: 'cancel-waiting', name: '取消', from: 'waiting', to: 'cancelled' },
-				{ id: 'cancel-doing', name: '取消', from: 'doing', to: 'cancelled' },
-				{ id: 'reopen-completed', name: '重新打开', from: 'completed', to: 'waiting' },
-				{ id: 'reopen-cancelled', name: '重新打开', from: 'cancelled', to: 'waiting' },
-			],
-		},
-	};
 }

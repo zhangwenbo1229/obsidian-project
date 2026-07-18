@@ -21,7 +21,7 @@ describe('dashboard module presentation', () => {
 		for (const name of ['weatherDefinition', 'calendarDefinition', 'noteStatsDefinition', 'recentFilesDefinition', 'newsDefinition', 'directoryDefinition', 'textDefinition', 'chartDefinition']) {
 			expect(registry).toContain(name);
 		}
-		expect(DASHBOARD_MODULE_DEFINITIONS).toHaveLength(15);
+		expect(DASHBOARD_MODULE_DEFINITIONS).toHaveLength(17);
 	});
 
 	it('renders configured web widgets in a lazy sandboxed iframe', () => {

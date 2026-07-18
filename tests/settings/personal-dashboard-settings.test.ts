@@ -52,7 +52,7 @@ describe('personal dashboard settings', () => {
 				openWeatherMapApiKey: ' open-weather ',
 			},
 		})).toEqual({
-			enabledCardKinds: ['calendar', 'weather'],
+			enabledCardKinds: ['calendar', 'weather', 'calculator', 'ip'],
 			fileOpenCounts: {},
 			checkInHistories: {},
 			openPersonalDashboardOnStartup: false,

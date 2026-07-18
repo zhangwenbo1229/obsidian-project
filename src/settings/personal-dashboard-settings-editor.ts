@@ -26,6 +26,8 @@ const CARD_KIND_LABELS: Record<DashboardCardKind, string> = {
 	'check-in': '打卡卡片',
 	heatmap: '热力图卡片',
 	iframe: '网页卡片',
+	calculator: '计算器卡片',
+	ip: '公网 IP 卡片',
 };
 
 export class PersonalDashboardSettingsEditor {

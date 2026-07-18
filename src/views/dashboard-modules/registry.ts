@@ -14,6 +14,8 @@ import { heatmapDefinition } from './heatmap-card';
 import { checkInDefinition } from './check-in-card';
 import { iframeDefinition } from './iframe-card';
 import { timeProgressDefinition } from './time-progress-card';
+import { calculatorDefinition } from './calculator-card';
+import { ipDefinition } from './ip-card';
 
 export const DASHBOARD_MODULE_DEFINITIONS: DashboardModuleDefinition[] = [
 	weatherDefinition,
@@ -31,6 +33,8 @@ export const DASHBOARD_MODULE_DEFINITIONS: DashboardModuleDefinition[] = [
 	checkInDefinition,
 	heatmapDefinition,
 	iframeDefinition,
+	calculatorDefinition,
+	ipDefinition,
 ];
 
 export function getDashboardModuleDefinition(kind: string): DashboardModuleDefinition | undefined {

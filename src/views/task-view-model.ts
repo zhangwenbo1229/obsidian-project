@@ -40,6 +40,7 @@ export interface TaskViewFilter {
 	today: string;
 	keyword?: string;
 	projectUid?: string | null;
+	showCompleted?: boolean;
 }
 
 export interface TaskViewGroup {
@@ -99,9 +100,9 @@ export function collectTaskViewItems(parents: readonly IndexedTask[]): TaskViewI
 	return items;
 }
 
-function matchesScope(item: TaskViewItem, scope: TaskViewScope, today: string): boolean {
+function matchesScope(item: TaskViewItem, scope: TaskViewScope, today: string, showCompleted: boolean): boolean {
 	if (scope === 'completed') return item.completed;
-	if (item.completed) return scope === 'all';
+	if (item.completed) return showCompleted;
 	if (scope === 'all') return true;
 	const date = taskViewItemDate(item);
 	if (!date) return false;
@@ -114,7 +115,7 @@ export function filterTaskViewItems(items: readonly TaskViewItem[], filter: Task
 	const keyword = filter.keyword?.trim().toLocaleLowerCase() ?? '';
 	return items.filter((item) => {
 		if (filter.projectUid && item.projectUid !== filter.projectUid) return false;
-		if (!matchesScope(item, filter.scope, filter.today)) return false;
+		if (!matchesScope(item, filter.scope, filter.today, filter.showCompleted ?? false)) return false;
 		if (!keyword) return true;
 		return [item.title, item.parentKey, item.parentTitle, item.projectCode, item.projectName, ...item.tags]
 			.some((value) => value.toLocaleLowerCase().includes(keyword));

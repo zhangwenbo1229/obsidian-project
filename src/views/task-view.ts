@@ -31,6 +31,7 @@ export class TaskView extends ItemView {
 	private projectUid: string | null = null;
 	private keyword = '';
 	private sidebarCollapsed = false;
+	private showCompleted = false;
 
 	constructor(leaf: WorkspaceLeaf, private readonly manager: ProjectManager) { super(leaf); }
 	getViewType(): string { return TASK_VIEW_TYPE; }
@@ -60,6 +61,11 @@ export class TaskView extends ItemView {
 		const search = searchWrap.createEl('input', { type: 'search', placeholder: '搜索任务或项目' });
 		search.value = this.keyword;
 		search.addEventListener('input', () => { this.keyword = search.value; this.renderContent(main, allItems, today); });
+		const showCompletedWrap = actions.createDiv({ cls: 'op-task-view-show-completed' });
+		const showCompletedCheckbox = showCompletedWrap.createEl('input', { type: 'checkbox', attr: { id: 'op-show-completed', 'aria-label': '显示已完成任务' } });
+		showCompletedCheckbox.checked = this.showCompleted;
+		showCompletedCheckbox.addEventListener('change', () => { this.showCompleted = showCompletedCheckbox.checked; this.renderContent(main, allItems, today); });
+		showCompletedWrap.createEl('label', { text: '显示已完成', attr: { for: 'op-show-completed' } });
 		const add = actions.createEl('button', { cls: 'mod-cta op-task-view-add', attr: { type: 'button' } });
 		setIcon(add.createSpan(), 'plus');
 		add.createSpan({ text: '新增任务' });
@@ -111,7 +117,7 @@ export class TaskView extends ItemView {
 	private renderContent(parent: HTMLElement, allItems: readonly TaskViewItem[], today: string): void {
 		parent.empty();
 		const items = filterTaskViewItems(allItems, {
-			scope: this.activeScope, today, projectUid: this.projectUid, keyword: this.keyword,
+			scope: this.activeScope, today, projectUid: this.projectUid, keyword: this.keyword, showCompleted: this.showCompleted,
 		});
 		const summary = parent.createDiv({ cls: 'op-task-view-summary' });
 		summary.createSpan({ text: `${items.length} 个任务` });

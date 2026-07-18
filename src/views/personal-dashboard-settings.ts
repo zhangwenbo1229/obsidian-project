@@ -34,6 +34,8 @@ export const ALL_DASHBOARD_CARD_KINDS: DashboardCardKind[] = [
 	'check-in',
 	'heatmap',
 	'iframe',
+	'calculator',
+	'ip',
 ];
 
 function normalizedHttpsOrigin(value: unknown): string {
@@ -58,9 +60,9 @@ export function normalizePersonalDashboardSettings(value?: unknown): PersonalDas
 	return {
 		openPersonalDashboardOnStartup: source.openPersonalDashboardOnStartup === true,
 		enabledCardKinds: Array.isArray(source.enabledCardKinds)
-			? [...new Set(source.enabledCardKinds.filter((kind): kind is DashboardCardKind =>
+			? [...new Set([...source.enabledCardKinds.filter((kind): kind is DashboardCardKind =>
 				typeof kind === 'string' && supported.has(kind as DashboardCardKind),
-			))]
+			), ...ALL_DASHBOARD_CARD_KINDS])]
 			: [...ALL_DASHBOARD_CARD_KINDS],
 		weatherCredentials: {
 			qweatherApiKey: typeof weather.qweatherApiKey === 'string' ? weather.qweatherApiKey.trim() : '',

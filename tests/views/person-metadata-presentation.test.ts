@@ -32,12 +32,12 @@ describe('person metadata configuration and editing', () => {
 	});
 
 	it('persists people through the manager person-file workflow', () => {
-		const manager = readFileSync(new URL('../../src/services/project-manager.ts', import.meta.url), 'utf8');
+		const manager = readFileSync(new URL('../../src/services/personnel-service.ts', import.meta.url), 'utf8');
 		expect(manager).toContain('serializePersonMarkdown');
 		expect(manager).toContain('personMarkdownPath');
 		expect(manager).toContain('sourcePath');
-		expect(manager).toContain('this.vault.ensureFolder');
-		expect(manager).toContain('this.vault.create');
+		expect(manager).toContain('this.pm.vault.ensureFolder');
+		expect(manager).toContain('this.pm.vault.create');
 		expect(manager).toContain('refreshPeopleFromMetadata');
 	});
 

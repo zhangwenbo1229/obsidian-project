@@ -16,6 +16,7 @@ import {
 	duplicateDashboardCard,
 	defaultDashboardCardBackground,
 	moveDashboardCard,
+	reorderDashboardCards,
 	resizeDashboardCard,
 } from './dashboard-layout';
 import { restoreProjectFilter } from './saved-project-filters';
@@ -23,6 +24,7 @@ import { filterProjectTasks, overdueTasks, pendingTasks, taskStatistics } from '
 import { renderTaskCardFields } from './task-card-fields';
 import { bindTaskCardActivation } from './task-card-interaction';
 import { DASHBOARD_MODULE_DEFINITIONS, getDashboardModuleDefinition } from './dashboard-modules/registry';
+import { renderModuleMessage } from './dashboard-modules/card-ui';
 
 export const PERSONAL_VIEW_TYPE = 'obsidian-project-personal';
 
@@ -113,8 +115,24 @@ export class PersonalView extends ItemView {
 			cardEl.addEventListener('dragstart', (event) => event.dataTransfer?.setData('text/plain', card.id));
 			cardEl.addEventListener('contextmenu', (event) => this.openFilterMenu(event, card));
 			this.attachResizeHandle(cardEl, card, workspace);
+			this.attachSortHandle(cardEl, card, workspace);
 			if (card.kind === 'iframe') this.attachIframeDragHandle(cardEl, card);
-			this.renderDashboardCard(cardEl, card, tasks, today, generation);
+			try {
+				this.renderDashboardCard(cardEl, card, tasks, today, generation);
+			} catch (error) {
+				console.error(`Dashboard card "${card.id}" (kind: ${card.kind}) rendering failed:`, error);
+				cardEl.empty();
+				const heading = cardEl.createDiv({ cls: 'op-dashboard-card-heading' });
+				const definition = getDashboardModuleDefinition(card.kind);
+				heading.createEl('strong', { text: card.title ?? definition?.label ?? card.kind });
+				renderModuleMessage(
+					cardEl,
+					'alert-triangle',
+					'渲染失败',
+					error instanceof Error ? error.message : String(error),
+					'op-dashboard-module-error',
+				);
+			}
 		}
 	}
 
@@ -345,6 +363,36 @@ export class PersonalView extends ItemView {
 			handle.addEventListener('pointermove', move);
 			handle.addEventListener('pointerup', finish, { once: true });
 			handle.addEventListener('pointercancel', finish, { once: true });
+		});
+	}
+
+	private attachSortHandle(cardEl: HTMLElement, card: PersonalDashboardCardLayout, workspace: HTMLElement): void {
+		const sortHandle = cardEl.createEl('button', {
+			cls: 'op-dashboard-sort-handle',
+			attr: { 'aria-label': '拖拽排序卡片', title: '拖拽排序卡片', type: 'button' },
+		});
+		setIcon(sortHandle, 'grip-vertical');
+		sortHandle.draggable = true;
+		sortHandle.addEventListener('dragstart', (event) => {
+			event.dataTransfer?.setData('application/x-op-sort', card.id);
+			event.dataTransfer?.setData('text/plain', card.id);
+			if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+			cardEl.addClass('is-sorting');
+		});
+		sortHandle.addEventListener('dragend', () => cardEl.removeClass('is-sorting'));
+		cardEl.addEventListener('dragover', (event) => {
+			if (!event.dataTransfer?.types.includes('application/x-op-sort')) return;
+			event.preventDefault();
+			event.dataTransfer.dropEffect = 'move';
+		});
+		cardEl.addEventListener('drop', (event) => {
+			const sortId = event.dataTransfer?.getData('application/x-op-sort');
+			if (!sortId || sortId === card.id) return;
+			event.preventDefault();
+			event.stopPropagation();
+			void this.manager.savePersonalDashboardLayout(
+				reorderDashboardCards(this.manager.personalDashboardLayout, sortId, card.id),
+			).then(() => this.render());
 		});
 	}
 

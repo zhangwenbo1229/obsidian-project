@@ -1,28 +1,21 @@
 import { Modal, Notice, Setting } from 'obsidian';
-import type { ProjectConfig, ProjectPriority, TaskFormField, TaskRelation, TaskTypeDefinition } from '../domain/types';
+import type { ProjectConfig, ProjectPriority, TaskFormField, TaskRelation } from '../domain/types';
 import type { ProjectManager } from '../services/project-manager';
 import { resolveTaskTypeTemplate, switchTaskTypeDraft, switchTaskTypeFieldDrafts } from '../services/task-service';
-import { fromDateTimeLocalInput, toDateTimeLocalInput } from '../utils/dates';
 import { buildTaskDialogShell } from './task-dialog';
 import { renderMarkdownEditor, type MarkdownEditorHandle } from './markdown-editor';
 import { createUuid } from '../utils/ids';
 import { taskFieldDefault, taskFieldEnabled, taskFieldOptions, taskFieldRule } from '../settings/task-field-configuration';
 import { validateConfiguredTaskFields } from '../services/task-field-validation';
-import { renderGroupedTagPicker } from './grouped-tag-picker';
-import { applyFieldPresentation } from '../views/field-presentation';
 import { renderSubtaskListEditor } from './subtask-list-editor';
-
-function fieldSetting(container: HTMLElement, name: string, type: TaskTypeDefinition | undefined, field: TaskFormField): Setting {
-	const setting = new Setting(container).setName(name);
-	applyFieldPresentation(setting, taskFieldRule(type, field));
-	return setting;
-}
-
-function displayValue(value: unknown): string {
-	return typeof value === 'string' || typeof value === 'number'
-		? String(value)
-		: '';
-}
+import {
+	fieldSetting,
+	renderCustomFields,
+	renderDateFields,
+	renderReporterField,
+	renderAssigneeField,
+	renderTagsField,
+} from './task-form-fields';
 
 export class CreateTaskModal extends Modal {
 	private project: ProjectConfig | undefined;
@@ -70,7 +63,7 @@ export class CreateTaskModal extends Modal {
 	private render(): void {
 		this.clearMarkdownEditors();
 		const shell = buildTaskDialogShell(this.contentEl, {
-			subtitle: '填写项目信息并创建到所选分组。',
+			subtitle: '填写项目信息并创建到所选项目。',
 		});
 		const taskType = this.currentTaskType();
 		const presentation = (field: TaskFormField) => taskFieldRule(taskType, field);
@@ -127,82 +120,18 @@ export class CreateTaskModal extends Modal {
 		if (taskFieldEnabled(taskType, 'title')) fieldSetting(identityEl, '标题', taskType, 'title').addText((text) =>
 			text.setValue(this.title).onChange((value) => (this.title = value)),
 		);
-		if (taskFieldEnabled(taskType, 'reporter')) fieldSetting(planningEl, '提报人', taskType, 'reporter').addDropdown((dropdown) => {
-			for (const person of this.manager.globalConfig.people.filter((item) => item.active)) dropdown.addOption(person.id, person.name);
-			dropdown.setValue(this.reporterId).onChange((value) => (this.reporterId = value));
-		});
-		if (taskFieldEnabled(taskType, 'assignee')) fieldSetting(planningEl, '经办人', taskType, 'assignee').addDropdown((dropdown) => {
-			dropdown.addOption('', '未分配');
-			for (const person of this.manager.globalConfig.people.filter((item) => item.active)) {
-				dropdown.addOption(person.id, person.name);
-			}
-			dropdown.setValue(this.assigneeId ?? '').onChange((value) => (this.assigneeId = value || null));
-		});
-		if (taskFieldEnabled(taskType, 'scheduledDate')) fieldSetting(planningEl, '计划日期', taskType, 'scheduledDate').addText((text) => {
-			text.inputEl.type = 'datetime-local';
-			text.setValue(toDateTimeLocalInput(this.scheduledDate)).onChange((value) => (this.scheduledDate = fromDateTimeLocalInput(value)));
-		});
-		if (taskFieldEnabled(taskType, 'dueDate')) fieldSetting(planningEl, '截止日期', taskType, 'dueDate').addText((text) => {
-			text.inputEl.type = 'datetime-local';
-			text.setValue(toDateTimeLocalInput(this.dueDate)).onChange((value) => (this.dueDate = fromDateTimeLocalInput(value)));
-		});
-		if (taskFieldEnabled(taskType, 'startDate')) fieldSetting(planningEl, '开始日期', taskType, 'startDate').addText((text) => {
-			text.inputEl.type = 'datetime-local';
-			text.setValue(toDateTimeLocalInput(this.startDate)).onChange((value) => (this.startDate = fromDateTimeLocalInput(value)));
-		});
-		if (taskFieldEnabled(taskType, 'endDate')) fieldSetting(planningEl, '结束日期', taskType, 'endDate').addText((text) => {
-			text.inputEl.type = 'datetime-local';
-			text.setValue(toDateTimeLocalInput(this.endDate)).onChange((value) => (this.endDate = fromDateTimeLocalInput(value)));
-		});
-		if (taskFieldEnabled(taskType, 'tags')) renderGroupedTagPicker(
-			planningEl,
-			this.manager,
-			this.tags,
-			(tags) => (this.tags = tags),
-			presentation('tags'),
-		);
-		for (const field of this.project?.customFields.filter((item) => item.active && (!item.taskTypeIds || item.taskTypeIds.includes(this.taskTypeId))) ?? []) {
-			const setting = new Setting(planningEl).setName(field.name);
-			applyFieldPresentation(setting, field);
-			if (field.type === 'boolean') {
-				setting.addToggle((toggle) => toggle.setValue(Boolean(this.custom[field.key] ?? field.default)).onChange((value) => (this.custom[field.key] = value)));
-			} else if (field.type === 'single-select') {
-				setting.addDropdown((dropdown) => {
-					for (const option of field.options ?? []) dropdown.addOption(option.id, option.name);
-				dropdown.setValue(displayValue(this.custom[field.key] ?? field.default)).onChange((value) => (this.custom[field.key] = value));
-				});
-			} else if (field.type === 'multi-select') {
-				setting.addText((text) => text.setPlaceholder('使用逗号分隔选项 ID').setValue(Array.isArray(this.custom[field.key]) ? (this.custom[field.key] as unknown[]).join(',') : '').onChange((value) => (this.custom[field.key] = value.split(/[,，]/u).map((item) => item.trim()).filter(Boolean))));
-			} else if (field.type === 'user') {
-				setting.addDropdown((dropdown) => {
-					dropdown.addOption('', '未选择');
-					for (const person of this.manager.globalConfig.people) dropdown.addOption(person.id, person.name);
-					dropdown.setValue(displayValue(this.custom[field.key])).onChange((value) => (this.custom[field.key] = value || null));
-				});
-			} else if (field.type === 'task-reference') {
-				setting.addDropdown((dropdown) => {
-					dropdown.addOption('', '未选择');
-					for (const task of this.manager.index.validTasks()) dropdown.addOption(task.document.metadata.uid, `${task.document.metadata.key} · ${task.document.metadata.title}`);
-					dropdown.setValue(displayValue(this.custom[field.key])).onChange((value) => (this.custom[field.key] = value || null));
-				});
-			} else if (field.type === 'date') {
-				setting.addText((text) => {
-					text.inputEl.type = 'date';
-					text.setValue(displayValue(this.custom[field.key] ?? field.default)).onChange((value) => (this.custom[field.key] = value || null));
-				});
-			} else if (field.type === 'datetime') {
-				setting.addText((text) => {
-					text.inputEl.type = 'datetime-local';
-					text.setValue(toDateTimeLocalInput(displayValue(this.custom[field.key] ?? field.default))).onChange((value) => (this.custom[field.key] = fromDateTimeLocalInput(value)));
-				});
-			} else if (field.type === 'multiline-text') {
-				setting.addTextArea((area) => area.setValue(displayValue(this.custom[field.key] ?? field.default)).onChange((value) => (this.custom[field.key] = value)));
-			} else {
-				setting.addText((text) => text.setValue(displayValue(this.custom[field.key] ?? field.default)).onChange((value) => {
-					this.custom[field.key] = field.type === 'number' ? Number(value) : value;
-				}));
-			}
-		}
+
+		renderReporterField(planningEl, taskType, this.manager.globalConfig.people, this.reporterId, (v) => (this.reporterId = v));
+		renderAssigneeField(planningEl, taskType, this.manager.globalConfig.people, this.assigneeId, (v) => (this.assigneeId = v));
+		renderDateFields(planningEl, taskType, {
+			scheduledDate: this.scheduledDate,
+			startDate: this.startDate,
+			dueDate: this.dueDate,
+			endDate: this.endDate,
+		}, (field, value) => { (this as Record<string, unknown>)[field] = value; });
+		renderTagsField(planningEl, taskType, this.manager, this.tags, (tags) => (this.tags = tags));
+		renderCustomFields(planningEl, this.project, this.taskTypeId, this.custom, this.manager, (key, value) => (this.custom[key] = value));
+
 		if (bodyEl) this.markdownEditors.push(renderMarkdownEditor({
 			app: this.manager.app,
 			container: bodyEl,

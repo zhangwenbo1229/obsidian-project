@@ -16,6 +16,8 @@ import type {
 	HeatmapDashboardModuleConfig,
 	IframeDashboardModuleConfig,
 	TimeProgressDashboardModuleConfig,
+	CalculatorDashboardModuleConfig,
+	IpDashboardModuleConfig,
 } from '../../domain/types';
 
 const WEATHER_PROVIDERS = new Set(['open-meteo', 'qweather', 'openweathermap']);
@@ -42,6 +44,8 @@ export const DASHBOARD_MODULE_CATALOG: Array<{
 	{ kind: 'check-in', label: '打卡', icon: 'badge-check', defaultSize: { columns: 2, rows: 2 } },
 	{ kind: 'heatmap', label: '热力图', icon: 'layout-grid', defaultSize: { columns: 3, rows: 2 } },
 	{ kind: 'iframe', label: '网页', icon: 'panels-top-left', defaultSize: { columns: 3, rows: 3 } },
+	{ kind: 'calculator', label: '计算器', icon: 'calculator', defaultSize: { columns: 2, rows: 3 } },
+	{ kind: 'ip', label: '公网 IP', icon: 'globe', defaultSize: { columns: 1, rows: 1 } },
 ];
 
 export function isDashboardModuleKind(value: string): value is DashboardModuleKind {
@@ -183,6 +187,8 @@ export function normalizeDashboardModuleConfig(kind: DashboardModuleKind, value:
 	} satisfies TextDashboardModuleConfig;
 	if (kind === 'iframe') return {
 		url: normalizedWebUrl(source.url),
+		width: boundedNumber(source.width, 0, 0, 10000),
+		height: boundedNumber(source.height, 0, 0, 10000),
 	} satisfies IframeDashboardModuleConfig;
 	if (kind === 'countdown') return {
 		mode: source.mode === 'countup' ? 'countup' : 'countdown',
@@ -215,6 +221,13 @@ export function normalizeDashboardModuleConfig(kind: DashboardModuleKind, value:
 		useCheckInData: source.useCheckInData === true,
 		checkInCardId: typeof source.checkInCardId === 'string' && source.checkInCardId.trim() ? source.checkInCardId.trim() : null,
 	} satisfies HeatmapDashboardModuleConfig;
+	if (kind === 'calculator') return {
+		expression: typeof source.expression === 'string' ? source.expression : '',
+	} satisfies CalculatorDashboardModuleConfig;
+	if (kind === 'ip') return {
+		networkEnabled: source.networkEnabled === true,
+		refreshMinutes: boundedNumber(source.refreshMinutes, 30, 0, 360),
+	} satisfies IpDashboardModuleConfig;
 	return {
 		chartType: source.chartType === 'bar' || source.chartType === 'pie' ? source.chartType : 'line',
 		csv: typeof source.csv === 'string' && source.csv.trim()

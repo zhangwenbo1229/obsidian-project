@@ -29,10 +29,20 @@ function renderIframe(context: DashboardModuleRenderContext): void {
 		},
 	});
 	const syncSize = (): void => {
-		const width = body.clientWidth;
-		const height = body.clientHeight;
-		if (width > 0) iframe.style.width = `${width}px`;
-		if (height > 0) iframe.style.height = `${height}px`;
+		const configuredWidth = config.width;
+		const configuredHeight = config.height;
+		if (configuredWidth && configuredWidth > 0) {
+			iframe.style.width = `${configuredWidth}px`;
+		} else {
+			const width = body.clientWidth;
+			if (width > 0) iframe.style.width = `${width}px`;
+		}
+		if (configuredHeight && configuredHeight > 0) {
+			iframe.style.height = `${configuredHeight}px`;
+		} else {
+			const height = body.clientHeight;
+			if (height > 0) iframe.style.height = `${height}px`;
+		}
 	};
 	syncSize();
 	const ResizeObserver = body.ownerDocument.defaultView?.ResizeObserver;

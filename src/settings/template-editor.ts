@@ -121,7 +121,7 @@ export class TemplateSettingsEditor {
 		try {
 			await this.manager.saveTaskTemplate(this.draft!);
 			this.draft = structuredClone(this.manager.taskTemplates.find((item) => item.id === this.selectedId) ?? this.draft);
-			new Notice('项目模板已保存，并同步到启用该模板的分组。');
+			new Notice('项目模板已保存，并同步到启用该模板的项目。');
 			this.mount(root);
 		} catch (error) {
 			new Notice(error instanceof Error ? error.message : String(error));

@@ -40,11 +40,19 @@ export function renderTextSettings(context: DashboardModuleSettingsContext): voi
 
 export function renderIframeSettings(context: DashboardModuleSettingsContext): void {
 	let config = context.config as IframeDashboardModuleConfig;
-	const update = (url: string) => { config = { ...config, url }; context.update(config); };
+	const update = (patch: Partial<IframeDashboardModuleConfig>) => { config = { ...config, ...patch }; context.update(config); };
 	section(context.container, '网页内容', '输入需要嵌入卡片的完整 HTTP 或 HTTPS 地址。目标网站可以通过自身安全策略拒绝嵌入。');
 	new Setting(context.container).setName('网页地址').setDesc('仅当前卡片加载该地址；插件不会读取或上传 vault 内容。').addText((text) => {
 		text.inputEl.type = 'url';
-		text.setPlaceholder('输入 HTTPS 地址').setValue(config.url).onChange(update);
+		text.setPlaceholder('输入 HTTPS 地址').setValue(config.url).onChange((url) => update({ url }));
+	});
+	new Setting(context.container).setName('宽度').setDesc('单位像素，留空则自适应卡片宽度。').addText((text) => {
+		text.inputEl.type = 'number';
+		text.setPlaceholder('自适应').setValue(config.width ? String(config.width) : '').onChange((value) => update({ width: value ? Number(value) : undefined }));
+	});
+	new Setting(context.container).setName('高度').setDesc('单位像素，留空则自适应卡片高度。').addText((text) => {
+		text.inputEl.type = 'number';
+		text.setPlaceholder('自适应').setValue(config.height ? String(config.height) : '').onChange((value) => update({ height: value ? Number(value) : undefined }));
 	});
 }
 

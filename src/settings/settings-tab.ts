@@ -14,7 +14,7 @@ const PAGE_LABELS: Record<SettingsRootPage, string> = {
 	general: '常规',
 	people: '人员',
 	templates: '项目模板',
-	projects: '分组',
+	projects: '项目配置',
 	'personal-dashboard': '个人仪表盘',
 	'view-display': '视图显示',
 	'task-metadata': '任务元数据',
@@ -171,13 +171,13 @@ export class ObsidianProjectSettingTab extends PluginSettingTab {
 	}
 
 	private renderTemplates(container: HTMLElement): void {
-		this.renderPageHeading(container, '项目模板', '集中管理项目类型、Markdown 描述、自定义字段和工作流，分组只负责选择启用。');
+		this.renderPageHeading(container, '项目模板', '集中管理项目类型、Markdown 描述、自定义字段和工作流，项目只负责选择启用。');
 		const section = container.createDiv({ cls: 'op-settings-section op-template-settings' });
 		new TemplateSettingsEditor(this.plugin.manager).mount(section);
 	}
 
 	private renderProjects(container: HTMLElement): void {
-		this.renderPageHeading(container, '项目配置', '分组仅管理基础信息和启用的项目模板。');
+		this.renderPageHeading(container, '项目配置', '管理项目基础信息和启用的项目模板。');
 		const projectGrid = container.createDiv({ cls: 'op-settings-project-grid' });
 		for (const project of this.plugin.manager.projects) {
 			const card = projectGrid.createEl('button', { cls: 'op-settings-project-card' });

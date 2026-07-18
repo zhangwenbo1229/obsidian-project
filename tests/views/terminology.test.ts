@@ -17,7 +17,7 @@ describe('group, project and task terminology', () => {
 			expect(modal).toContain('选择项目');
 		}
 		expect(projectView).toContain('个分组 · ${scopedTasks.length} 个项目');
-		expect(settings).toContain("projects: '分组'");
+		expect(settings).toContain("projects: '项目配置'");
 	});
 
 	it('uses task wording for embedded checklist items', () => {

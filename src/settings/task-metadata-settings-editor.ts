@@ -88,12 +88,17 @@ export class TaskMetadataSettingsEditor {
 				rule.enabled = false;
 				this.render();
 			}));
+		new Setting(section).setName('字段类型').setDesc('日期').addDropdown((dropdown) => {
+			dropdown.addOption('date', '日期');
+			dropdown.setValue('date');
+			dropdown.setDisabled(true);
+		});
 		this.renderPresentation(section, rule);
 	}
 
 	private renderPresentation(
 		section: HTMLElement,
-		rule: Pick<TaskMetadataFieldPresentation, 'icon' | 'color' | 'showInTaskView' | 'showInProjectCards'>,
+		rule: Pick<TaskMetadataFieldPresentation, 'icon' | 'color' | 'required' | 'showInTaskView' | 'showInProjectCards'>,
 	): void {
 		new Setting(section).setName('样式').setDesc(rule.icon ? `图标：${rule.icon}` : '未设置图标')
 			.addButton((button) => button.setButtonText('选择图标').setIcon('smile-plus').onClick(() => {
@@ -103,6 +108,8 @@ export class TaskMetadataSettingsEditor {
 				}).open();
 			}))
 			.addColorPicker((picker) => picker.setValue(rule.color).onChange((color) => (rule.color = color)));
+		new Setting(section).setName('必填').addToggle((toggle) => toggle
+			.setValue(rule.required).onChange((value) => (rule.required = value)));
 		new Setting(section).setName('任务视图显示').addToggle((toggle) => toggle
 			.setValue(rule.showInTaskView).onChange((value) => (rule.showInTaskView = value)));
 		new Setting(section).setName('项目卡片显示').addToggle((toggle) => toggle

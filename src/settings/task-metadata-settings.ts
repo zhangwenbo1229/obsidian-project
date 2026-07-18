@@ -18,6 +18,7 @@ export interface TaskMetadataFieldPresentation {
 	enabled: boolean;
 	icon: string;
 	color: string;
+	required: boolean;
 	showInTaskView: boolean;
 	showInProjectCards: boolean;
 }
@@ -113,6 +114,7 @@ export function normalizeTaskMetadataSettings(value?: unknown): TaskMetadataSett
 				enabled: item.enabled !== false,
 				icon: typeof item.icon === 'string' && item.icon.trim() ? item.icon.trim() : fallback.icon,
 				color: color(item.color, fallback.color),
+				required: item.required === true,
 				showInTaskView: item.showInTaskView !== false,
 				showInProjectCards: item.showInProjectCards !== false,
 			}];

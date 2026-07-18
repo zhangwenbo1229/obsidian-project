@@ -2,22 +2,20 @@ import { ItemView, Notice, setIcon, WorkspaceLeaf } from 'obsidian';
 import type { ProjectManager } from '../services/project-manager';
 import type { IndexedTask } from '../index/task-index';
 import { EditTaskModal } from '../modals/edit-task-modal';
-import { activeProjectFilterCount, ALL_PROJECTS_UID, calendarItems, classifyTaskQuadrants, filterProjectTasks, priorityForQuadrantDrop, type ProjectFilters, type TaskQuadrant } from './selectors';
-import { transitionTask } from '../domain/workflow';
+import { activeProjectFilterCount, ALL_PROJECTS_UID, filterProjectTasks, type ProjectFilters } from './selectors';
 import type { ProjectConfig, TaskDisplayField } from '../domain/types';
-import { displayDateTime, localDate, localDateTime } from '../utils/dates';
+import { displayDateTime, localDateTime } from '../utils/dates';
 import { PROJECT_FILTER_FIELD_DEFINITIONS, ProjectFilterFields, projectFilterFieldDefinition, type ProjectFilterField } from './project-filter-fields';
 import { restoreProjectFilter, serializeProjectFilter, validateSavedFilterName } from './saved-project-filters';
 import { createUuid } from '../utils/ids';
 import { toggleMultiValue } from './multi-select-filter';
 import { renderTaskTitle } from './task-type-presentation';
-import { renderTaskCardFields } from './task-card-fields';
-import { bindTaskCardActivation } from './task-card-interaction';
 import { formatCustomFieldValue } from './custom-field-presentation';
-import { calendarMonthCells, calendarRangeTitle, calendarWeekDates, moveCalendarCursor } from './calendar-range';
 import { renderProjectList } from './project-list-renderer';
-import { layoutCalendarSpans, type CalendarSpanLayout } from './calendar-span-layout';
 import { renderProjectViewContent, type ProjectViewMode } from './project-view-content-renderer';
+import { renderCalendarView } from './project-view-calendar';
+import { renderBoardView } from './project-view-board';
+import { renderQuadrantsView } from './project-view-quadrants';
 
 export const PROJECT_VIEW_TYPE = 'obsidian-project-project';
 type Mode = ProjectViewMode;
@@ -453,87 +451,12 @@ export class ProjectView extends ItemView {
 		renderProjectViewContent({
 			container, mode: this.mode, tasks,
 			renderList: (parent, entries) => this.renderList(parent, [...entries]),
-			renderBoard: (parent, entries) => this.renderBoard(parent, [...entries]),
-			renderCalendar: (parent, entries) => this.renderCalendar(parent, [...entries]),
-			renderQuadrants: (parent, entries) => this.renderQuadrants(parent, [...entries]),
+			renderBoard: (parent, entries) => renderBoardView(parent, [...entries], this.manager, this.displayFields('board'), this, () => this.render()),
+			renderCalendar: (parent, entries) => renderCalendarView(parent, [...entries], this.manager, { cursor: this.calendarCursor, mode: this.calendarMode }, this.displayFields('calendar'), this, () => this.render()),
+			renderQuadrants: (parent, entries) => renderQuadrantsView(parent, [...entries], this.manager, this.displayFields('quadrants'), this, () => this.render()),
 		});
 	}
 
-	private renderQuadrants(parent: HTMLElement, tasks: ReturnType<typeof filterProjectTasks>): void {
-		const fields = this.displayFields('quadrants');
-		const quadrants = classifyTaskQuadrants(tasks, localDate(), this.manager.projectViewDisplay.behavior.quadrants);
-		const grid = parent.createDiv({ cls: 'op-quadrant-grid' });
-		const definitions: Array<[TaskQuadrant, string, string]> = [
-			['importantUrgent', '重要且紧急', '立即处理'],
-			['importantNotUrgent', '重要不紧急', '安排计划'],
-			['notImportantUrgent', '不重要但紧急', '快速处理或委派'],
-			['notImportantNotUrgent', '不重要不紧急', '稍后评估'],
-		];
-		for (const [key, title, description] of definitions) {
-			const region = grid.createDiv({ cls: `op-quadrant-region is-${key}` });
-			region.setAttribute('data-quadrant', key);
-			region.addEventListener('dragover', (event) => {
-				event.preventDefault();
-				region.addClass('is-drop-target');
-			});
-			region.addEventListener('dragleave', (event) => {
-				if (!region.contains(event.relatedTarget as Node | null)) region.removeClass('is-drop-target');
-			});
-			region.addEventListener('drop', (event) => {
-				event.preventDefault();
-				region.removeClass('is-drop-target');
-				const uid = event.dataTransfer?.getData('text/plain');
-				const task = uid ? this.manager.index.get(uid) : undefined;
-				if (task) void this.moveCardToQuadrant(task, key);
-			});
-			const heading = region.createDiv({ cls: 'op-quadrant-heading' });
-			const copy = heading.createDiv();
-			copy.createEl('h3', { text: title });
-			copy.createEl('p', { text: description });
-			heading.createSpan({ cls: 'op-count-pill', text: String(quadrants[key].length) });
-			this.renderQuadrantCards(region, quadrants[key], fields);
-		}
-	}
-
-	private renderQuadrantCards(parent: HTMLElement, tasks: IndexedTask[], fields: readonly TaskDisplayField[]): void {
-		const list = parent.createDiv({ cls: 'op-quadrant-card-list' });
-		if (tasks.length === 0) {
-			list.createDiv({ cls: 'op-empty-state', text: '暂无任务' });
-			return;
-		}
-		for (const task of tasks) {
-			const card = list.createDiv({ cls: 'op-quadrant-card', attr: { role: 'button', tabindex: '0', 'aria-label': task.document.metadata.title } });
-			renderTaskCardFields(card, task, this.manager, fields, {
-				titleClassName: 'op-quadrant-card-title', component: this, markerBeforeKey: true, priorityInCorner: true,
-			});
-			card.draggable = true;
-			card.addEventListener('dragstart', (event) => {
-				card.dataset.wasDragged = 'true';
-				event.dataTransfer?.setData('text/plain', task.document.metadata.uid);
-			});
-			card.addEventListener('dragend', () => window.setTimeout(() => delete card.dataset.wasDragged, 0));
-			card.addEventListener('click', (event) => {
-				if (card.dataset.wasDragged) event.stopImmediatePropagation();
-			});
-			bindTaskCardActivation(card, () => new EditTaskModal(this.manager, task).open());
-		}
-	}
-	private async moveCardToQuadrant(task: IndexedTask, quadrant: TaskQuadrant): Promise<void> {
-		const priority = priorityForQuadrantDrop(
-			task.document.metadata.priority,
-			quadrant,
-			this.manager.projectViewDisplay.behavior.quadrants.importantPriorities,
-		);
-		if (priority === task.document.metadata.priority) return;
-		try {
-			const document = structuredClone(task.document);
-			document.metadata.priority = priority;
-			await this.manager.saveTask(task, document);
-		} catch (error) {
-			new Notice(error instanceof Error ? error.message : String(error));
-			this.render();
-		}
-	}
 	private taskButton(parent: HTMLElement, task: IndexedTask): void {
 		const button = parent.createEl('button', { cls: 'op-task-row' });
 		const taskType = task.project.taskTypes.find((type) => type.id === task.document.metadata.taskTypeId);
@@ -607,160 +530,6 @@ export class ProjectView extends ItemView {
 			links: task.document.unknownLinks.join('\n'),
 			subtasks: task.document.subtasks ?? '',
 		}[column] ?? '';
-	}
-	private renderBoard(parent: HTMLElement, tasks: ReturnType<typeof filterProjectTasks>): void {
-		const fields = this.displayFields('board');
-		const rules = this.manager.projectViewDisplay.behavior.board;
-		const board = parent.createDiv({ cls: 'op-board' });
-		for (const [category, name] of [['todo', '未开始'], ['in_progress', '处理中'], ['done', '已完成']] as const) {
-			if (category === 'done' && !rules.showCompletedColumn) continue;
-			const column = board.createDiv({ cls: 'op-board-column' });
-			column.dataset.statusGroup = category;
-			if (rules.autoUpdateStatusOnDrop) {
-				column.addEventListener('dragover', (event) => event.preventDefault());
-				column.addEventListener('drop', (event) => {
-					event.preventDefault();
-					const uid = event.dataTransfer?.getData('text/plain');
-					const task = uid ? this.manager.index.get(uid) : undefined;
-					if (task) void this.moveCardToBoardGroup(task, category);
-				});
-			}
-			const grouped = tasks.filter((task) => this.boardGroup(task) === category);
-			column.createEl('h4', { text: `${name} · ${grouped.length}` });
-			for (const task of grouped) {
-				this.renderBoardCard(column, task, rules.autoUpdateStatusOnDrop, fields);
-			}
-		}
-	}
-	private boardGroup(task: IndexedTask): 'todo' | 'in_progress' | 'done' {
-		const rules = this.manager.projectViewDisplay.behavior.board;
-		for (const category of ['todo', 'in_progress', 'done'] as const) {
-			if (rules.groupStatusIds[category].includes(task.document.metadata.statusId)) return category;
-		}
-		return task.project.workflow.statuses.find((status) => status.id === task.document.metadata.statusId)?.category ?? 'todo';
-	}
-	private async moveCardToBoardGroup(task: IndexedTask, category: 'todo' | 'in_progress' | 'done'): Promise<void> {
-		if (this.boardGroup(task) === category) return;
-		const configured = this.manager.projectViewDisplay.behavior.board.groupStatusIds[category];
-		const candidates = task.project.workflow.statuses.filter((status) => configured.includes(status.id) || (configured.length === 0 && status.category === category));
-		const transitions = new Set(task.project.workflow.transitions
-			.filter((transition) => transition.from === task.document.metadata.statusId)
-			.map((transition) => transition.to));
-		const target = candidates.find((status) => transitions.has(status.id)) ?? candidates[0];
-		if (target) await this.moveCard(task, target.id);
-	}
-	private renderBoardCard(parent: HTMLElement, task: IndexedTask, draggable: boolean, fields: readonly TaskDisplayField[]): void {
-		const card = parent.createDiv({ cls: 'op-board-card', attr: { role: 'button', tabindex: '0', 'aria-label': task.document.metadata.title } });
-		renderTaskCardFields(card, task, this.manager, fields, {
-			titleClassName: 'op-board-card-title', component: this, markerBeforeKey: true, priorityInCorner: true, keyTitleInline: true,
-		});
-		card.draggable = draggable;
-		if (draggable) card.addEventListener('dragstart', (event) => event.dataTransfer?.setData('text/plain', task.document.metadata.uid));
-		bindTaskCardActivation(card, () => new EditTaskModal(this.manager, task).open());
-	}
-	private async moveCard(task: IndexedTask, statusId: string): Promise<void> {
-		if (task.document.metadata.statusId === statusId) return;
-		try {
-			const document = structuredClone(task.document);
-			document.metadata = transitionTask(document.metadata, task.project.workflow, statusId);
-			await this.manager.saveTask(task, document);
-		} catch (error) {
-			new Notice(error instanceof Error ? error.message : String(error));
-			this.render();
-		}
-	}
-	private renderCalendar(parent: HTMLElement, tasks: ReturnType<typeof filterProjectTasks>): void {
-		const fields = this.displayFields('calendar');
-		const rules = this.manager.projectViewDisplay.behavior.calendar;
-		const controls = parent.createDiv({ cls: 'op-calendar-controls' });
-		const changePeriod = (delta: number) => {
-			this.calendarCursor = moveCalendarCursor(this.calendarCursor, this.calendarMode, delta);
-			this.render();
-		};
-		const previousLabel = this.calendarMode === 'week' ? '上一周' : '上个月';
-		const nextLabel = this.calendarMode === 'week' ? '下一周' : '下个月';
-		const previous = controls.createEl('button', { text: previousLabel });
-		previous.addEventListener('click', () => changePeriod(-1));
-		controls.createEl('strong', { text: calendarRangeTitle(this.calendarCursor, this.calendarMode) });
-		const next = controls.createEl('button', { text: nextLabel });
-		next.addEventListener('click', () => changePeriod(1));
-		const modeSwitch = controls.createDiv({ cls: 'op-calendar-mode-switch' });
-		for (const [mode, label] of [['month', '月'], ['week', '周']] as const) {
-			const button = modeSwitch.createEl('button', { text: label, attr: { type: 'button' } });
-			button.toggleClass('is-active', this.calendarMode === mode);
-			button.addEventListener('click', () => { this.calendarMode = mode; this.render(); });
-		}
-		const grid = parent.createDiv({ cls: `op-calendar-grid is-${this.calendarMode}` });
-		for (const weekday of ['一', '二', '三', '四', '五', '六', '日']) grid.createDiv({ cls: 'op-calendar-weekday', text: weekday });
-		const items = calendarItems(tasks, rules.dateSource);
-		const dates = this.calendarMode === 'week' ? calendarWeekDates(this.calendarCursor) : calendarMonthCells(this.calendarCursor);
-		const spans = layoutCalendarSpans(items, dates);
-		for (let row = 0; row < Math.ceil(dates.length / 7); row += 1) {
-			this.renderCalendarWeekRow(grid, dates.slice(row * 7, row * 7 + 7), spans.filter((span) => span.row === row), fields);
-		}
-	}
-	private renderCalendarWeekRow(
-		grid: HTMLElement,
-		dates: readonly (string | null)[],
-		spans: readonly CalendarSpanLayout[],
-		fields: readonly TaskDisplayField[],
-	): void {
-		const week = grid.createDiv({ cls: 'op-calendar-week-row' });
-		week.style.setProperty('--op-calendar-lanes', String(Math.max(1, ...spans.map((span) => span.lane + 1))));
-		const days = week.createDiv({ cls: 'op-calendar-day-layer' });
-		for (const date of dates) {
-			const cell = days.createDiv({ cls: `op-calendar-day${date ? '' : ' is-empty'}` });
-			if (!date) continue;
-			cell.dataset.date = date;
-			if (this.manager.projectViewDisplay.behavior.calendar.autoUpdateDateOnDrop) {
-				cell.addEventListener('dragover', (event) => event.preventDefault());
-				cell.addEventListener('drop', (event) => {
-					event.preventDefault();
-					const uid = event.dataTransfer?.getData('text/plain');
-					const task = uid ? this.manager.index.get(uid) : undefined;
-					if (task) void this.moveCalendarCard(task, date);
-				});
-			}
-			cell.createEl('strong', { text: this.calendarMode === 'week' ? `${Number(date.slice(5, 7))}/${Number(date.slice(8, 10))}` : String(Number(date.slice(8, 10))) });
-		}
-		const layer = week.createDiv({ cls: 'op-calendar-span-layer' });
-		for (const span of spans) {
-			const task = this.manager.index.get(span.item.uid);
-			if (!task) continue;
-			const button = layer.createDiv({ cls: 'op-calendar-task', attr: { role: 'button', tabindex: '0', 'aria-label': task.document.metadata.title } });
-			button.style.gridColumn = `${span.columnStart} / span ${span.columnSpan}`;
-			button.style.gridRow = String(span.lane + 1);
-			button.draggable = this.manager.projectViewDisplay.behavior.calendar.autoUpdateDateOnDrop;
-			if (button.draggable) button.addEventListener('dragstart', (event) => event.dataTransfer?.setData('text/plain', task.document.metadata.uid));
-			renderTaskCardFields(button, task, this.manager, fields, {
-				titleClassName: 'op-calendar-task-title', compact: true, component: this, markerBeforeKey: true, priorityInCorner: true,
-				keyTitleInline: true,
-			});
-			bindTaskCardActivation(button, () => new EditTaskModal(this.manager, task).open());
-		}
-	}
-	private async moveCalendarCard(task: IndexedTask, targetDate: string): Promise<void> {
-		const source = this.manager.projectViewDisplay.behavior.calendar.dateSource;
-		const document = structuredClone(task.document);
-		const metadata = document.metadata;
-		const shift = (value: string | null | undefined, from: string): string | null => {
-			if (!value) return null;
-			const days = Math.round((Date.parse(`${value.slice(0, 10)}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
-			const next = new Date(`${targetDate}T00:00:00Z`);
-			next.setUTCDate(next.getUTCDate() + days);
-			return next.toISOString().slice(0, 10);
-		};
-		if (source === 'planned-range') {
-			const from = (metadata.scheduledDate ?? metadata.dueDate)?.slice(0, 10) ?? targetDate;
-			metadata.scheduledDate = targetDate;
-			if (metadata.dueDate) metadata.dueDate = shift(metadata.dueDate, from);
-		} else if (source === 'execution-range') {
-			const from = (metadata.startDate ?? metadata.endDate)?.slice(0, 10) ?? targetDate;
-			metadata.startDate = targetDate;
-			if (metadata.endDate) metadata.endDate = shift(metadata.endDate, from);
-		} else metadata[source] = targetDate;
-		try { await this.manager.saveTask(task, document); }
-		catch (error) { new Notice(error instanceof Error ? error.message : String(error)); this.render(); }
 	}
 	private displayFields(mode: Mode): readonly TaskDisplayField[] {
 		return this.manager.projectViewDisplay[mode];

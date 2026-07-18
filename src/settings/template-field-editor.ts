@@ -1,4 +1,4 @@
-import { Menu, Setting } from 'obsidian';
+import { App, Menu, Modal, Setting } from 'obsidian';
 import type {
 	CustomFieldDefinition,
 	CustomFieldType,
@@ -34,6 +34,24 @@ const CUSTOM_FIELD_TYPE_LABELS: Record<CustomFieldType, string> = {
 };
 
 const CUSTOM_FIELD_TYPES = Object.keys(CUSTOM_FIELD_TYPE_LABELS) as CustomFieldType[];
+
+const BUILT_IN_FIELD_TYPE: Record<TaskFormField, CustomFieldType> = {
+	title: 'text',
+	priority: 'single-select',
+	reporter: 'user',
+	assignee: 'user',
+	scheduledDate: 'date',
+	dueDate: 'date',
+	startDate: 'date',
+	endDate: 'date',
+	tags: 'multi-select',
+	body: 'multiline-text',
+	links: 'text',
+	subtasks: 'task-reference',
+	relations: 'task-reference',
+	notes: 'multiline-text',
+	customFields: 'text',
+};
 
 function stringValue(value: unknown): string {
 	return typeof value === 'string' || typeof value === 'number' ? String(value) : '';
@@ -113,6 +131,12 @@ export class TemplateFieldEditor {
 				rule.color = undefined;
 				this.rerender();
 			}));
+		new Setting(fieldContainer).setName('字段类型').addDropdown((dropdown) => {
+			for (const type of CUSTOM_FIELD_TYPES) dropdown.addOption(type, CUSTOM_FIELD_TYPE_LABELS[type]);
+			dropdown.setValue(BUILT_IN_FIELD_TYPE[field] ?? 'text').onChange((type) => {
+				(this.type.fieldConfig![field] as unknown as Record<string, unknown>).fieldType = type;
+			});
+		});
 		if (field === 'priority') this.renderPriorityOptions(fieldContainer);
 		if (!NO_DEFAULT_FIELDS.has(field)) this.renderDefault(fieldContainer, field);
 	}
@@ -189,11 +213,16 @@ export class TemplateFieldEditor {
 	}
 
 	private addCustomField(): void {
-		const index = this.template.customFields.length + 1;
-		this.template.customFields.push({
-			id: createUuid(), key: `field-${index}`, name: `字段 ${index}`, type: 'text',
-			required: false, active: true, default: null,
-		});
+		new FieldKeyPromptModal(this.manager.app, (key) => {
+			const index = this.template.customFields.length + 1;
+			const fieldKey = key || `field-${index}`;
+			const fieldName = key || `字段 ${index}`;
+			this.template.customFields.push({
+				id: createUuid(), key: fieldKey, name: fieldName, type: 'text',
+				required: false, active: true, default: null,
+			});
+			this.rerender();
+		}).open();
 	}
 
 	private renderCustomField(container: HTMLElement, field: CustomFieldDefinition): void {
@@ -263,5 +292,57 @@ export class TemplateFieldEditor {
 			field.options = [...(field.options ?? []), { id: `option-${index}`, name: `选项 ${index}` }];
 			this.rerender();
 		}));
+	}
+}
+
+class FieldKeyPromptModal extends Modal {
+	private onSubmit: (key: string) => void;
+
+	constructor(app: App, onSubmit: (key: string) => void) {
+		super(app);
+		this.onSubmit = onSubmit;
+	}
+
+	onOpen(): void {
+		const { contentEl } = this;
+		contentEl.createEl('h3', { text: '新增自定义元数据' });
+		contentEl.createEl('p', { text: '请输入字段键（英文标识符），留空则自动生成。' });
+
+		const input = contentEl.createEl('input', {
+			type: 'text',
+			placeholder: '例如：priority、deadline',
+			cls: 'op-field-key-prompt-input',
+		});
+		input.style.width = '100%';
+		input.style.marginBottom = '16px';
+
+		const buttonContainer = contentEl.createDiv({ cls: 'op-field-key-prompt-buttons' });
+		buttonContainer.style.display = 'flex';
+		buttonContainer.style.justifyContent = 'flex-end';
+		buttonContainer.style.gap = '8px';
+
+		const cancelBtn = buttonContainer.createEl('button', { text: '取消' });
+		cancelBtn.addEventListener('click', () => this.close());
+
+		const confirmBtn = buttonContainer.createEl('button', { text: '确定' });
+		confirmBtn.classList.add('mod-cta');
+		confirmBtn.addEventListener('click', () => {
+			this.onSubmit(input.value.trim());
+			this.close();
+		});
+
+		input.addEventListener('keydown', (event) => {
+			if (event.key === 'Enter') {
+				this.onSubmit(input.value.trim());
+				this.close();
+			}
+		});
+
+		// Focus the input after a short delay
+		setTimeout(() => input.focus(), 50);
+	}
+
+	onClose(): void {
+		this.contentEl.empty();
 	}
 }
