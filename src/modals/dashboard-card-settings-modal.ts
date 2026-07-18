@@ -49,6 +49,7 @@ export class DashboardCardSettingsModal extends Modal {
 	private percentageValue: number;
 	private percentageDisplay: 'number' | 'progress';
 	private percentageProgressStyle: 'linear' | 'semicircle';
+	private dataSource: 'project' | 'task';
 
 	constructor(
 		private readonly manager: ProjectManager,
@@ -75,6 +76,7 @@ export class DashboardCardSettingsModal extends Modal {
 		this.percentageValue = card.percentageValue ?? 0;
 		this.percentageDisplay = card.percentageDisplay ?? 'number';
 		this.percentageProgressStyle = card.percentageProgressStyle ?? 'linear';
+		this.dataSource = card.dataSource ?? 'project';
 	}
 
 	onOpen(): void {
@@ -127,12 +129,25 @@ export class DashboardCardSettingsModal extends Modal {
 		if (this.kind !== 'percentage' || this.percentageDataMode === 'task') {
 			new Setting(this.contentEl)
 				.setName('数据源')
-				.setDesc('使用全部任务，或绑定一个已保存的项目筛选器。')
-				.addDropdown((dropdown) => {
-					dropdown.addOption('', '全部任务');
-					for (const filter of this.manager.savedProjectFilters) dropdown.addOption(filter.id, filter.name);
-					dropdown.setValue(this.filterId ?? '').onChange((value) => (this.filterId = value || null));
-				});
+				.setDesc('项目：按项目筛选器统计；任务：仅统计当前用户参与的任务。')
+				.addDropdown((dropdown) => dropdown
+					.addOption('project', '项目')
+					.addOption('task', '任务')
+					.setValue(this.dataSource)
+					.onChange((value) => {
+						this.dataSource = value as 'project' | 'task';
+						this.renderContent();
+					}));
+			if (this.dataSource === 'project') {
+				new Setting(this.contentEl)
+					.setName('项目筛选器')
+					.setDesc('选择一个已保存的项目筛选器，或留空使用全部任务。')
+					.addDropdown((dropdown) => {
+						dropdown.addOption('', '全部项目');
+						for (const filter of this.manager.savedProjectFilters) dropdown.addOption(filter.id, filter.name);
+						dropdown.setValue(this.filterId ?? '').onChange((value) => (this.filterId = value || null));
+					});
+			}
 		}
 
 		if (this.kind !== 'percentage' || this.percentageDataMode === 'task') this.renderMetricSetting();
@@ -270,6 +285,7 @@ export class DashboardCardSettingsModal extends Modal {
 					percentageValue: this.percentageValue,
 					percentageDisplay: this.percentageDisplay,
 					percentageProgressStyle: this.percentageProgressStyle,
+					dataSource: this.dataSource,
 					moduleConfig: isDashboardModuleKind(this.kind) ? this.moduleConfig : undefined,
 				},
 			));

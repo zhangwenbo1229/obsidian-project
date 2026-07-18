@@ -1,5 +1,5 @@
 # Concatenate CSS modules into styles.css at the project root
-# Module order: base.css, project-view.css, task-editor.css, settings.css, dashboard.css
+# Module order: base.css, dashboard-layout.css, dashboard-cards.css, dashboard.css, project-view.css, task-editor.css, settings.css
 
 param(
     [string]$OutputFile = "styles.css"
@@ -13,10 +13,12 @@ $OutputPath = Join-Path $ProjectRoot $OutputFile
 
 $modules = @(
     "base.css",
+    "dashboard-layout.css",
+    "dashboard-cards.css",
+    "dashboard.css",
     "project-view.css",
     "task-editor.css",
-    "settings.css",
-    "dashboard.css"
+    "settings.css"
 )
 
 $tempFile = [System.IO.Path]::GetTempFileName()

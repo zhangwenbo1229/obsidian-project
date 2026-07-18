@@ -69,6 +69,7 @@ export type {
 	WeatherDashboardModuleConfig,
 	WeatherProviderId,
 	CalendarDashboardModuleConfig,
+	NoteMetadataFilter,
 	NoteStatsDashboardModuleConfig,
 	NoteCountMetricConfig,
 	NoteStatsDisplayField,

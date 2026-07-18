@@ -28,6 +28,7 @@ export interface PersonalDashboardCardLayout {
 	numberColor?: string;
 	backgroundColor?: string;
 	fontSize?: number;
+	dataSource?: 'project' | 'task';
 	percentageDataMode?: 'task' | 'manual' | 'direct';
 	percentageCurrent?: number;
 	percentageTarget?: number;
@@ -59,6 +60,12 @@ export interface CalendarDashboardModuleConfig {
 	checkInIcon: string;
 }
 
+export interface NoteMetadataFilter {
+	key: string;
+	mode: 'include' | 'exclude';
+	values: string[];
+}
+
 export interface NoteStatsDashboardModuleConfig {
 	rootPath: string;
 	excludePaths: string[];
@@ -66,6 +73,7 @@ export interface NoteStatsDashboardModuleConfig {
 	extensions: string[];
 	metadataKey: string;
 	metadataValue: string;
+	metadataFilters: NoteMetadataFilter[];
 	displayFields: NoteStatsDisplayField[];
 	fileCountMetrics: NoteCountMetricConfig[];
 }
@@ -76,8 +84,8 @@ export interface NoteCountMetricConfig {
 	rootPath: string;
 	excludePaths: string[];
 	extensions: string[];
-	metadataKey: string;
-	metadataValue: string;
+	metadataFilters: NoteMetadataFilter[];
+	fieldType: NoteStatsDisplayField;
 }
 
 export type NoteStatsDisplayField = 'noteCount' | 'characterCount' | 'folderCount' | 'totalSize' | 'topFolders';
@@ -181,6 +189,7 @@ export interface CalculatorDashboardModuleConfig {
 export interface IpDashboardModuleConfig {
 	networkEnabled: boolean;
 	refreshMinutes: number;
+	showGeoLocation: boolean;
 }
 
 export type DashboardModuleConfig =

@@ -219,10 +219,27 @@ export function renderNoteStatsSettings(context: DashboardModuleSettingsContext)
 		context.update(config);
 	};
 	section(context.container, '统计范围', '留空根目录会统计整个库，文件后缀和元数据筛选只应用于当前卡片。');
-	new Setting(context.container).setName('独立文件数量').setDesc('每个指标可使用不同目录、排除项、后缀和元数据筛选。').setHeading();
+	new Setting(context.container).setName('独立文件数量').setDesc('每个指标可使用不同目录、排除项、后缀和元数据筛选。拖拽排序将反映在卡片上。').setHeading();
 	const metricsContainer = context.container.createDiv({ cls: 'op-note-count-metrics' });
+	let draggedMetricId: string | null = null;
 	const renderMetric = (metric: NoteStatsDashboardModuleConfig['fileCountMetrics'][number]) => {
 		const group = metricsContainer.createDiv({ cls: 'op-note-count-metric-settings' });
+		group.draggable = true;
+		group.addEventListener('dragstart', () => (draggedMetricId = metric.id));
+		group.addEventListener('dragover', (event) => event.preventDefault());
+		group.addEventListener('drop', () => {
+			if (!draggedMetricId || draggedMetricId === metric.id) return;
+			const metrics = [...config.fileCountMetrics];
+			const draggedIdx = metrics.findIndex((m) => m.id === draggedMetricId);
+			const targetIdx = metrics.findIndex((m) => m.id === metric.id);
+			if (draggedIdx < 0 || targetIdx < 0) return;
+			const [dragged] = metrics.splice(draggedIdx, 1);
+			if (!dragged) return;
+			metrics.splice(targetIdx, 0, dragged);
+			update({ fileCountMetrics: metrics });
+		});
+		const dragHandle = group.createDiv({ cls: 'op-note-metric-drag-handle' });
+		dragHandle.createSpan({ text: '⠿', attr: { 'aria-hidden': 'true' } });
 		new Setting(group).setName(metric.name)
 			.addText((text) => text.setPlaceholder('指标名称').setValue(metric.name).onChange((name) => {
 				metric.name = name;
@@ -231,6 +248,16 @@ export function renderNoteStatsSettings(context: DashboardModuleSettingsContext)
 			.addExtraButton((button) => button.setIcon('trash-2').setTooltip('删除指标').onClick(() => {
 				update({ fileCountMetrics: config.fileCountMetrics.filter((item) => item.id !== metric.id) });
 				group.remove();
+			}));
+		new Setting(group).setName('显示字段类型').addDropdown((dropdown) => dropdown
+			.addOption('noteCount', '文件数量')
+			.addOption('characterCount', '字符数量')
+			.addOption('folderCount', '目录数量')
+			.addOption('totalSize', '文件大小')
+			.setValue(metric.fieldType || 'noteCount')
+			.onChange((fieldType) => {
+				metric.fieldType = fieldType as NoteStatsDashboardModuleConfig['fileCountMetrics'][number]['fieldType'];
+				update({ fileCountMetrics: [...config.fileCountMetrics] });
 			}));
 		new Setting(group).setName('根目录').addText((text) => text.setValue(metric.rootPath).onChange((rootPath) => {
 			metric.rootPath = rootPath;
@@ -244,15 +271,47 @@ export function renderNoteStatsSettings(context: DashboardModuleSettingsContext)
 			metric.extensions = value.split(/[,，]/u).map((item) => item.trim()).filter(Boolean);
 			update({ fileCountMetrics: [...config.fileCountMetrics] });
 		}));
-		new Setting(group).setName('元数据筛选')
-			.addText((text) => text.setPlaceholder('属性').setValue(metric.metadataKey).onChange((metadataKey) => {
-				metric.metadataKey = metadataKey;
+		// 元数据筛选
+		const filtersContainer = group.createDiv({ cls: 'op-note-metadata-filters' });
+		filtersContainer.createDiv({ cls: 'op-dashboard-module-section-label', text: '元数据筛选' });
+		const filters = metric.metadataFilters ?? [];
+		const renderFilter = (filter: NoteStatsDashboardModuleConfig['fileCountMetrics'][number]['metadataFilters'][number], filterIdx: number) => {
+			const filterRow = filtersContainer.createDiv({ cls: 'op-note-metadata-filter-row' });
+			new Setting(filterRow).setName('模式').addDropdown((dropdown) => dropdown
+				.addOption('include', '包含')
+				.addOption('exclude', '不包含')
+				.setValue(filter.mode)
+				.onChange((mode) => {
+					filter.mode = mode as 'include' | 'exclude';
+					update({ fileCountMetrics: [...config.fileCountMetrics] });
+				}));
+			new Setting(filterRow).setName('属性').addText((text) => text
+				.setPlaceholder('Status')
+				.setValue(filter.key)
+				.onChange((key) => {
+					filter.key = key;
+					update({ fileCountMetrics: [...config.fileCountMetrics] });
+				}));
+			new Setting(filterRow).setName('值（逗号分隔）').addText((text) => text
+				.setPlaceholder('Active, Draft')
+				.setValue(filter.values.join(', '))
+				.onChange((value) => {
+					filter.values = value.split(/[,，]/u).map((item) => item.trim()).filter(Boolean);
+					update({ fileCountMetrics: [...config.fileCountMetrics] });
+				}));
+			new Setting(filterRow).addExtraButton((button) => button.setIcon('trash-2').setTooltip('删除筛选').onClick(() => {
+				filters.splice(filterIdx, 1);
 				update({ fileCountMetrics: [...config.fileCountMetrics] });
-			}))
-			.addText((text) => text.setPlaceholder('值（可留空）').setValue(metric.metadataValue).onChange((metadataValue) => {
-				metric.metadataValue = metadataValue;
-				update({ fileCountMetrics: [...config.fileCountMetrics] });
+				filterRow.remove();
 			}));
+		};
+		for (const [idx, filter] of filters.entries()) renderFilter(filter, idx);
+		new Setting(group).addButton((button) => button.setButtonText('新增元数据筛选').setIcon('plus').onClick(() => {
+			const newFilter = { key: '', mode: 'include' as const, values: [] };
+			filters.push(newFilter);
+			update({ fileCountMetrics: [...config.fileCountMetrics] });
+			renderFilter(newFilter, filters.length - 1);
+		}));
 	};
 	for (const metric of config.fileCountMetrics) renderMetric(metric);
 	new Setting(context.container).addButton((button) => button.setButtonText('新增文件数量指标').setIcon('plus').onClick(() => {
@@ -260,7 +319,8 @@ export function renderNoteStatsSettings(context: DashboardModuleSettingsContext)
 		const metric = {
 			id: `metric-${Date.now()}`,
 			name: `文件数量 ${index}`,
-			rootPath: '', excludePaths: [], extensions: ['md'], metadataKey: '', metadataValue: '',
+			rootPath: '', excludePaths: [], extensions: ['md'],
+			metadataFilters: [], fieldType: 'noteCount' as const,
 		};
 		update({ fileCountMetrics: [...config.fileCountMetrics, metric] });
 		renderMetric(metric);

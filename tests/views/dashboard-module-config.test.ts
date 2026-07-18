@@ -55,12 +55,12 @@ describe('personal dashboard module configuration', () => {
 		});
 		expect(normalizeDashboardModuleConfig('note-stats', {
 			fileCountMetrics: [
-				{ id: ' work ', name: ' 工作笔记 ', rootPath: ' Work ', extensions: [' .MD '], metadataKey: 'status', metadataValue: 'active', excludePaths: ['Work/Archive'] },
+				{ id: ' work ', name: ' 工作笔记 ', rootPath: ' Work ', extensions: [' .MD '], excludePaths: ['Work/Archive'], fieldType: 'noteCount', metadataFilters: [] },
 				{ id: '', name: '', rootPath: '', extensions: [] },
 			],
 		})).toMatchObject({
 			fileCountMetrics: [
-				{ id: 'work', name: '工作笔记', rootPath: 'Work', extensions: ['md'], metadataKey: 'status', metadataValue: 'active', excludePaths: ['Work/Archive'] },
+				{ id: 'work', name: '工作笔记', rootPath: 'Work', extensions: ['md'], excludePaths: ['Work/Archive'], fieldType: 'noteCount', metadataFilters: [] },
 				{ id: 'metric-2', name: '文件数量 2', rootPath: '', extensions: ['md'] },
 			],
 		});

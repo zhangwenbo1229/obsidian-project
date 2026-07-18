@@ -70,7 +70,7 @@ export class PersonalView extends ItemView {
 		const hero = container.createDiv({ cls: 'op-view-hero' });
 		const heroCopy = hero.createDiv();
 		heroCopy.createDiv({ cls: 'op-eyebrow', text: 'MY WORK / 我的工作台' });
-		heroCopy.createEl('h2', { text: '任务概览' });
+		heroCopy.createEl('h2', { text: '工作台' });
 		heroCopy.createEl('p', { text: '拖拽卡片调整位置，拖动右下角调整大小，右键绑定保存筛选器。' });
 		const issueButton = hero.createEl('button', {
 			cls: 'op-quiet-action',
@@ -171,7 +171,13 @@ export class PersonalView extends ItemView {
 			return;
 		}
 		if (card.kind === 'task-list') {
-			const selected = this.tasksForMetric(tasks, card.metric, today);
+			const sourceTasks = card.dataSource === 'task'
+				? tasks.filter((t) => {
+					const uid = this.manager.globalConfig.currentUserId;
+					return t.document.metadata.reporterId === uid || t.document.metadata.assigneeId === uid;
+				})
+				: tasks;
+			const selected = this.tasksForMetric(sourceTasks, card.metric, today);
 			heading.createSpan({ cls: 'op-count-pill', text: String(selected.length) });
 			const list = cardEl.createDiv({ cls: `op-task-card-list is-${card.taskListDirection}` });
 			this.renderTasks(list, selected, card.displayFields);
@@ -179,7 +185,13 @@ export class PersonalView extends ItemView {
 		}
 		cardEl.addClass('op-dashboard-stat-card');
 		cardEl.style.setProperty('--op-dashboard-card-accent', card.backgroundColor ?? defaultDashboardCardBackground(card.metric, card.kind));
-		const stats = taskStatistics(tasks, today);
+		const sourceTasks = card.dataSource === 'task'
+			? tasks.filter((t) => {
+				const uid = this.manager.globalConfig.currentUserId;
+				return t.document.metadata.reporterId === uid || t.document.metadata.assigneeId === uid;
+			})
+			: tasks;
+		const stats = taskStatistics(sourceTasks, today);
 		const total = stats.completed + stats.incomplete + stats.terminated;
 		const values: Record<DashboardMetric, number> = {
 			total,

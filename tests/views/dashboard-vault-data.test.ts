@@ -99,7 +99,7 @@ describe('dashboard vault data', () => {
 			5,
 			[],
 			{
-				extensions: ['md'], metadataKey: 'status', metadataValue: 'active',
+				extensions: ['md'], metadataKey: 'status', metadataValue: 'active', metadataFilters: [],
 				frontmatter: (file) => file.path === 'Work/Alpha.md' ? { status: 'active' } : { status: 'archived' },
 			},
 		);
@@ -109,7 +109,7 @@ describe('dashboard vault data', () => {
 
 	it('counts independent file metrics without reading file contents', () => {
 		expect(countFilteredFiles(files, 'Work', ['Work/Plans'], {
-			extensions: ['md'], metadataKey: 'status', metadataValue: 'active',
+			extensions: ['md'], metadataKey: 'status', metadataValue: 'active', metadataFilters: [],
 			frontmatter: (file) => file.path === 'Work/Alpha.md' ? { status: 'active' } : undefined,
 		})).toBe(1);
 	});

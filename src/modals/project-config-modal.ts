@@ -1,6 +1,7 @@
 import { Modal, Notice, Setting } from 'obsidian';
 import type { ProjectConfig } from '../domain/types';
 import type { ProjectManager } from '../services/project-manager';
+import { TaskMarkerPickerModal } from './task-marker-picker-modal';
 
 export class ProjectConfigModal extends Modal {
 	private project: ProjectConfig;
@@ -36,6 +37,15 @@ export class ProjectConfigModal extends Modal {
 		root.empty();
 		new Setting(root).setName('基础配置').setDesc('任务类型、自定义字段和工作流统一在任务模板中管理。').setHeading();
 		new Setting(root).setName('项目名称').addText((text) => text.setValue(this.project.name).onChange((value) => (this.project.name = value)));
+		new Setting(root).setName('项目图标').setDesc(this.project.icon ? `当前：${this.project.icon}` : '未设置')
+			.addButton((button) => button.setButtonText('选择图标').setIcon('smile-plus').onClick(() => {
+				new TaskMarkerPickerModal(this.manager.app, this.project.icon ?? '', (icon) => {
+					this.project.icon = icon || undefined;
+					this.render();
+				}).open();
+			}));
+		new Setting(root).setName('项目颜色').setDesc('用于任务视图中的项目标识')
+			.addColorPicker((picker) => picker.setValue(this.project.color ?? '#3b82f6').onChange((value) => (this.project.color = value)));
 		new Setting(root).setName('启用项目').addToggle((toggle) => toggle.setValue(this.project.active).onChange((value) => (this.project.active = value)));
 		new Setting(root).setName('任务目录').addText((text) => text.setValue(this.project.taskDirectory).onChange((value) => (this.project.taskDirectory = value)));
 		new Setting(root).setName('按月分组').addToggle((toggle) => toggle.setValue(this.project.groupByMonth).onChange((value) => (this.project.groupByMonth = value)));

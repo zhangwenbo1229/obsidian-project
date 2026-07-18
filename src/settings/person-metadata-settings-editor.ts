@@ -3,6 +3,7 @@ import type { PersonMetadataFieldDefinition, PersonMetadataFieldType, PersonName
 import type { ProjectManager } from '../services/project-manager';
 import { PERSON_METADATA_FIELD_TYPES, normalizePersonMetadataFields, normalizePersonNamePresentation } from '../services/person-metadata';
 import { createUuid } from '../utils/ids';
+import { TaskMarkerPickerModal } from '../modals/task-marker-picker-modal';
 
 const TYPE_LABELS: Record<PersonMetadataFieldType, string> = {
 	text: '文本', 'multiline-text': '多行文本', number: '数字', boolean: '布尔', date: '日期', datetime: '日期时间',
@@ -28,9 +29,13 @@ export class PersonMetadataSettingsEditor {
 		new Setting(nameCard).setName('人员名称属性').setDesc('控制 Markdown 中 @人员引用的标题、图标和名称颜色。').setHeading();
 		new Setting(nameCard).setName('显示标题').addText((text) => text
 			.setValue(this.namePresentation.title).onChange((title) => (this.namePresentation.title = title)));
-		new Setting(nameCard).setName('名称图标').addText((text) => text
-			.setPlaceholder('图标名称或 emoji').setValue(this.namePresentation.icon ?? '')
-			.onChange((icon) => (this.namePresentation.icon = icon.trim() || undefined)));
+		new Setting(nameCard).setName('名称图标').setDesc(this.namePresentation.icon ? `当前：${this.namePresentation.icon}` : '未设置')
+			.addButton((button) => button.setButtonText('选择图标').setIcon('smile-plus').onClick(() => {
+				new TaskMarkerPickerModal(this.manager.app, this.namePresentation.icon ?? '', (icon) => {
+					this.namePresentation.icon = icon || undefined;
+					this.render();
+				}).open();
+			}));
 		new Setting(nameCard).setName('名称颜色').addColorPicker((picker) => picker
 			.setValue(this.namePresentation.color ?? '#0c66e4').onChange((color) => (this.namePresentation.color = color)));
 		const heading = new Setting(this.root).setName('人员元数据').setDesc('定义所有人员共享的元数据字段、类型和显示样式。').setHeading();
@@ -58,7 +63,13 @@ export class PersonMetadataSettingsEditor {
 			for (const type of PERSON_METADATA_FIELD_TYPES) dropdown.addOption(type, TYPE_LABELS[type]);
 			dropdown.setValue(field.type).onChange((type) => { field.type = type as PersonMetadataFieldType; this.render(); });
 		});
-		new Setting(card).setName('元数据图标').addText((text) => text.setValue(field.icon ?? '').onChange((icon) => (field.icon = icon.trim() || undefined)));
+		new Setting(card).setName('元数据图标').setDesc(field.icon ? `当前：${field.icon}` : '未设置')
+			.addButton((button) => button.setButtonText('选择图标').setIcon('smile-plus').onClick(() => {
+				new TaskMarkerPickerModal(this.manager.app, field.icon ?? '', (icon) => {
+					field.icon = icon || undefined;
+					this.render();
+				}).open();
+			}));
 		new Setting(card).setName('元数据颜色').addColorPicker((picker) => picker.setValue(field.color ?? '#626f86').onChange((color) => (field.color = color)));
 		if (field.type === 'single-select' || field.type === 'multi-select') {
 			new Setting(card).setName('选项').setDesc('使用逗号分隔。').addText((text) => text

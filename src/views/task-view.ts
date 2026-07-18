@@ -107,7 +107,9 @@ export class TaskView extends ItemView {
 			const count = items.filter((item) => item.projectUid === project.uid).length;
 			const button = groups.createEl('button', { cls: 'op-task-view-nav-item', attr: { type: 'button' } });
 			button.toggleClass('is-active', this.projectUid === project.uid);
-			setIcon(button.createSpan({ cls: 'op-task-view-nav-icon' }), 'folder');
+			const projectIcon = project.icon || 'folder';
+			setIcon(button.createSpan({ cls: 'op-task-view-nav-icon' }), projectIcon);
+			if (project.color) button.style.setProperty('--op-project-color', project.color);
 			button.createSpan({ cls: 'op-task-view-nav-label', text: project.name });
 			button.createSpan({ cls: 'op-task-view-nav-count', text: String(count) });
 			button.addEventListener('click', () => { this.activeScope = 'all'; this.projectUid = project.uid; this.render(); });
@@ -131,7 +133,13 @@ export class TaskView extends ItemView {
 		const groups = parent.createDiv({ cls: 'op-task-view-groups' });
 		for (const group of groupTaskViewItems(items)) {
 			const section = groups.createEl('section', { cls: 'op-task-view-group' });
+			const project = this.manager.projects.find((p) => p.code === group.projectCode);
 			const groupHeading = section.createEl('button', { cls: 'op-task-view-group-heading', attr: { type: 'button' } });
+			const projectIcon = project?.icon || 'key';
+			const iconSpan = groupHeading.createSpan({ cls: 'op-task-view-project-icon' });
+			if (/^[a-z0-9][a-z0-9-]*$/iu.test(projectIcon)) setIcon(iconSpan, projectIcon);
+			else iconSpan.textContent = projectIcon;
+			if (project?.color) groupHeading.style.setProperty('--op-project-color', project.color);
 			groupHeading.createSpan({ cls: 'op-task-view-project-key', text: group.parentKey });
 			groupHeading.createEl('strong', { text: group.parentTitle });
 			groupHeading.createSpan({ cls: 'op-task-view-project-name', text: group.projectName });

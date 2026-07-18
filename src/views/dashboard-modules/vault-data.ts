@@ -1,3 +1,5 @@
+import type { NoteMetadataFilter } from '../../domain/types';
+
 export interface DashboardVaultFile {
 	path: string;
 	basename: string;
@@ -20,12 +22,40 @@ export interface NoteStatisticsFilter<T extends DashboardVaultFile> {
 	extensions: string[];
 	metadataKey: string;
 	metadataValue: string;
+	metadataFilters: NoteMetadataFilter[];
 	frontmatter: (file: T) => Record<string, unknown> | undefined;
+}
+
+function matchesMetadataFilters<T extends DashboardVaultFile>(file: T, filters: NoteMetadataFilter[], frontmatter: (file: T) => Record<string, unknown> | undefined): boolean {
+	if (filters.length === 0) return true;
+	const fm = frontmatter(file);
+	if (!fm) return filters.every((f) => f.mode === 'exclude');
+	for (const filter of filters) {
+		const fileValue = fm[filter.key];
+		const hasKey = fileValue !== undefined && fileValue !== null;
+		if (filter.values.length === 0) {
+			// 只检查属性是否存在
+			if (filter.mode === 'include' && !hasKey) return false;
+			if (filter.mode === 'exclude' && hasKey) return false;
+			continue;
+		}
+		const stringValue = (val: unknown): string => typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean' ? String(val) : '';
+		const fileValues: string[] = Array.isArray(fileValue) ? fileValue.map(stringValue) : [stringValue(fileValue)];
+		const anyMatch = filter.values.some((v) => fileValues.includes(v));
+		if (filter.mode === 'include' && !anyMatch) return false;
+		if (filter.mode === 'exclude' && anyMatch) return false;
+	}
+	return true;
 }
 
 function matchesNoteFilter<T extends DashboardVaultFile>(file: T, filter: NoteStatisticsFilter<T>): boolean {
 	const extension = file.path.includes('.') ? file.path.split('.').at(-1)?.toLowerCase() ?? '' : '';
 	if (filter.extensions.length > 0 && !filter.extensions.includes(extension)) return false;
+	// 新版元数据筛选（多属性多值）
+	if (filter.metadataFilters.length > 0) {
+		return matchesMetadataFilters(file, filter.metadataFilters, filter.frontmatter);
+	}
+	// 旧版兼容：单属性单值筛选
 	if (!filter.metadataKey) return true;
 	const value = filter.frontmatter(file)?.[filter.metadataKey];
 	if (value === undefined) return false;

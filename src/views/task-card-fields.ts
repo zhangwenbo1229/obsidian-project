@@ -1,4 +1,4 @@
-import { Component, MarkdownRenderer } from 'obsidian';
+import { Component, MarkdownRenderer, setIcon } from 'obsidian';
 import type { TaskDisplayField } from '../domain/types';
 import type { IndexedTask } from '../index/task-index';
 import type { ProjectManager } from '../services/project-manager';
@@ -51,7 +51,12 @@ function personField(
 	presentation?: FieldPresentation,
 ): void {
 	const person = manager.globalConfig.people.find((item) => item.id === personId);
-	const element = labeledField(parent, field, person?.name ?? fallback, manager, presentation);
+	const namePresentation = manager.globalConfig.personNamePresentation;
+	const nameFieldPresentation: FieldPresentation = {
+		icon: namePresentation?.icon || presentation?.icon,
+		color: namePresentation?.color || presentation?.color,
+	};
+	const element = labeledField(parent, field, person?.name ?? fallback, manager, nameFieldPresentation);
 	if (!person || !element) return;
 	element.addClass('op-person-field-button');
 	element.setAttribute('role', 'button');
@@ -146,7 +151,21 @@ export function renderTaskCardFields(
 			if (presentation('priority').color) priority.style.color = presentation('priority').color!;
 			if (options.priorityInCorner && presentation('priority').icon) applyLabelPresentation(wrapper, { icon: presentation('priority').icon });
 		}
-		else if (field === 'project') labeledField(flow, field, `${task.project.code} · ${task.project.name}`, manager);
+		else if (field === 'project') {
+			const project = task.project;
+			const element = flow.createDiv({ cls: 'op-card-field is-project' });
+			const definition = presentation('project');
+			applyValuePresentation(element, definition);
+			renderFieldLabel(element, taskDisplayFieldLabel(field, taskCustomFields(manager)), definition);
+			const value = element.createDiv({ cls: 'op-card-field-value op-project-field-value' });
+			if (project.icon) {
+				const icon = value.createSpan({ cls: 'op-project-field-icon' });
+				if (/^[a-z0-9][a-z0-9-]*$/iu.test(project.icon)) setIcon(icon, project.icon);
+				else icon.textContent = project.icon;
+			}
+			if (project.color) value.style.setProperty('--op-project-color', project.color);
+			value.createSpan({ cls: 'op-project-field-text', text: `${project.code} · ${project.name}` });
+		}
 		else if (field === 'type') labeledField(flow, field, taskType?.name ?? metadata.taskTypeId, manager);
 		else if (field === 'status') labeledField(flow, field, task.project.workflow.statuses.find((status) => status.id === metadata.statusId)?.name ?? metadata.statusId, manager);
 		else if (field === 'reporter') personField(flow, field, metadata.reporterId, '未设置', manager, presentation('reporter'));

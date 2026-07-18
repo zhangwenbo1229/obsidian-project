@@ -16,6 +16,8 @@ export interface ProjectConfig {
 	taskTypes: TaskTypeDefinition[];
 	customFields: CustomFieldDefinition[];
 	workflow: WorkflowDefinition;
+	icon?: string;
+	color?: string;
 }
 
 export interface ProjectFilterDefinition {

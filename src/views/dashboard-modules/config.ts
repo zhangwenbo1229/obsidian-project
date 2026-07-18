@@ -146,6 +146,14 @@ export function normalizeDashboardModuleConfig(kind: DashboardModuleKind, value:
 		extensions: normalizedExtensions(source.extensions),
 		metadataKey: typeof source.metadataKey === 'string' ? source.metadataKey.trim() : '',
 		metadataValue: typeof source.metadataValue === 'string' ? source.metadataValue.trim() : '',
+		metadataFilters: Array.isArray(source.metadataFilters) ? source.metadataFilters.map((value) => {
+			const filter = objectValue(value);
+			return {
+				key: typeof filter.key === 'string' ? filter.key.trim() : '',
+				mode: (filter.mode === 'exclude' ? 'exclude' : 'include') as 'include' | 'exclude',
+				values: Array.isArray(filter.values) ? filter.values.filter((v): v is string => typeof v === 'string').map((v) => v.trim()).filter(Boolean) : [],
+			};
+		}).filter((f) => f.key) : [],
 		displayFields: Array.isArray(source.displayFields)
 			? [...new Set(source.displayFields.filter((field): field is NoteStatsDashboardModuleConfig['displayFields'][number] =>
 				typeof field === 'string' && NOTE_STATS_FIELDS.has(field),
@@ -153,14 +161,24 @@ export function normalizeDashboardModuleConfig(kind: DashboardModuleKind, value:
 			: ['noteCount', 'characterCount', 'folderCount', 'topFolders'],
 		fileCountMetrics: Array.isArray(source.fileCountMetrics) ? source.fileCountMetrics.map((value, index) => {
 			const metric = objectValue(value);
+			const fieldType = typeof metric.fieldType === 'string' && NOTE_STATS_FIELDS.has(metric.fieldType)
+				? metric.fieldType as NoteStatsDashboardModuleConfig['fileCountMetrics'][number]['fieldType']
+				: 'noteCount';
 			return {
 				id: typeof metric.id === 'string' && metric.id.trim() ? metric.id.trim() : `metric-${index + 1}`,
 				name: typeof metric.name === 'string' && metric.name.trim() ? metric.name.trim() : `文件数量 ${index + 1}`,
 				rootPath: typeof metric.rootPath === 'string' ? metric.rootPath.trim().replace(/^\/+|\/+$/gu, '') : '',
 				excludePaths: normalizedDirectoryPaths(metric.excludePaths),
 				extensions: normalizedExtensions(metric.extensions),
-				metadataKey: typeof metric.metadataKey === 'string' ? metric.metadataKey.trim() : '',
-				metadataValue: typeof metric.metadataValue === 'string' ? metric.metadataValue.trim() : '',
+				metadataFilters: Array.isArray(metric.metadataFilters) ? metric.metadataFilters.map((v) => {
+					const f = objectValue(v);
+					return {
+						key: typeof f.key === 'string' ? f.key.trim() : '',
+						mode: (f.mode === 'exclude' ? 'exclude' : 'include') as 'include' | 'exclude',
+						values: Array.isArray(f.values) ? f.values.filter((val): val is string => typeof val === 'string').map((val) => val.trim()).filter(Boolean) : [],
+					};
+				}).filter((f) => f.key) : [],
+				fieldType,
 			};
 		}) : [],
 	} satisfies NoteStatsDashboardModuleConfig;
@@ -227,6 +245,7 @@ export function normalizeDashboardModuleConfig(kind: DashboardModuleKind, value:
 	if (kind === 'ip') return {
 		networkEnabled: source.networkEnabled === true,
 		refreshMinutes: boundedNumber(source.refreshMinutes, 30, 0, 360),
+		showGeoLocation: source.showGeoLocation === true,
 	} satisfies IpDashboardModuleConfig;
 	return {
 		chartType: source.chartType === 'bar' || source.chartType === 'pie' ? source.chartType : 'line',
