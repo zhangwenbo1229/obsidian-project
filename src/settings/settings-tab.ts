@@ -9,6 +9,7 @@ import { PersonalDashboardSettingsEditor } from './personal-dashboard-settings-e
 import { ConfigurationTransferEditor } from './configuration-transfer-editor';
 import { TaskMetadataSettingsEditor } from './task-metadata-settings-editor';
 import { PersonMetadataSettingsEditor } from './person-metadata-settings-editor';
+import { renderUnifiedMetadataEditor } from './unified-metadata-editor';
 
 const PAGE_LABELS: Record<SettingsRootPage, string> = {
 	general: '常规',
@@ -18,6 +19,7 @@ const PAGE_LABELS: Record<SettingsRootPage, string> = {
 	'personal-dashboard': '个人仪表盘',
 	'view-display': '视图显示',
 	'task-metadata': '任务元数据',
+	metadata: '元数据管理',
 	'configuration-data': '配置数据',
 };
 
@@ -29,6 +31,7 @@ const PAGE_ICONS: Record<SettingsRootPage, string> = {
 	'personal-dashboard': 'layout-dashboard',
 	'view-display': 'panels-top-left',
 	'task-metadata': 'list-checks',
+	metadata: 'database',
 	'configuration-data': 'import',
 };
 
@@ -57,8 +60,14 @@ export class ObsidianProjectSettingTab extends PluginSettingTab {
 		else if (this.navigation.page === 'personal-dashboard') this.renderPersonalDashboard(content);
 		else if (this.navigation.page === 'view-display') this.renderViewDisplay(content);
 		else if (this.navigation.page === 'task-metadata') this.renderTaskMetadata(content);
+		else if (this.navigation.page === 'metadata') this.renderMetadata(content);
 		else if (this.navigation.page === 'configuration-data') this.renderConfigurationData(content);
 		else this.renderProjectDetail(content);
+	}
+
+	openProjectDetail(projectUid: string): void {
+		this.navigation.openProject(projectUid);
+		this.display();
 	}
 
 	private renderNavigation(shell: HTMLElement): void {
@@ -232,6 +241,12 @@ export class ObsidianProjectSettingTab extends PluginSettingTab {
 		this.renderPageHeading(container, '任务元数据', '统一控制 Tasks 元数据在任务视图与项目卡片中的图标、颜色和可见性。');
 		const section = container.createDiv({ cls: 'op-settings-section op-task-metadata-settings' });
 		new TaskMetadataSettingsEditor(this.plugin.manager).mount(section);
+	}
+
+	private renderMetadata(container: HTMLElement): void {
+		this.renderPageHeading(container, '元数据管理', '定义全局元数据字段池，供项目模板、人员元数据和任务自定义字段统一引用。');
+		const section = container.createDiv({ cls: 'op-settings-section op-unified-metadata-settings' });
+		renderUnifiedMetadataEditor(section, this.plugin.manager);
 	}
 
 	private renderProjectDetail(container: HTMLElement): void {

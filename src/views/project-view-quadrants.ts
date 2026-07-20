@@ -7,6 +7,7 @@ import { localDate } from '../utils/dates';
 import { renderTaskCardFields } from './task-card-fields';
 import { bindTaskCardActivation } from './task-card-interaction';
 import { EditTaskModal } from '../modals/edit-task-modal';
+import { openTaskCardContextMenu } from './task-card-context-menu';
 
 export function renderQuadrantsView(
 	parent: HTMLElement,
@@ -77,6 +78,7 @@ function renderQuadrantCards(
 			if (card.dataset.wasDragged) event.stopImmediatePropagation();
 		});
 		bindTaskCardActivation(card, () => new EditTaskModal(manager, task).open());
+		card.addEventListener('contextmenu', (event) => openTaskCardContextMenu(event, task, manager));
 	}
 }
 

@@ -187,7 +187,7 @@
 
 .op-task-card-list {
 	display: grid;
-	gap: 9px;
+	gap: 12px;
 	max-height: 58vh;
 	overflow: auto;
 }

@@ -34,6 +34,8 @@ export interface PersonNamePresentation {
 	title: string;
 	icon?: string;
 	color?: string;
+	/** 引用统一元数据字段池中的字段 ID */
+	unifiedMetadataFieldId?: string;
 }
 
 export interface CustomFieldOption {

@@ -50,7 +50,7 @@ export class MigrationModal extends Modal {
 		});
 		const treeSize = collectTaskTree(this.entry.document.metadata.uid, this.manager.index).length;
 		const discardedFields = Object.keys(this.entry.document.metadata.custom).filter((key) =>
-			!target?.customFields.some((field) => field.key === key && this.entry.project.customFields.some((source) => source.key === key && source.type === field.type)),
+			!(target?.customFields ?? []).some((field) => field.key === key && (this.entry.project.customFields ?? []).some((source) => source.key === key && source.type === field.type)),
 		).length;
 		new Setting(this.contentEl).setDesc(`当前任务：1 个文件；整棵任务树：${treeSize} 个文件。${discardedFields} 个不兼容自定义字段值会写入迁移报告但不带入目标项目。`)
 			.addButton((button) => button.setButtonText('迁移当前任务').setCta().onClick(() => void this.submit(false)))
@@ -61,8 +61,8 @@ export class MigrationModal extends Modal {
 		const target = this.manager.projects.find((project) => project.uid === this.targetUid);
 		if (!target) return;
 		const mappings: Record<string, string> = {};
-		for (const source of this.entry.project.customFields) {
-			const match = target.customFields.find((field) => field.key === source.key && field.type === source.type);
+		for (const source of this.entry.project.customFields ?? []) {
+			const match = (target.customFields ?? []).find((field) => field.key === source.key && field.type === source.type);
 			if (match) mappings[source.key] = match.key;
 		}
 		try {

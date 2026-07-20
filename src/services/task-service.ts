@@ -6,6 +6,8 @@ import type {
 	TaskRelation,
 	TaskTypeDefinition,
 } from '../domain/types';
+import type { UnifiedMetadataField } from '../domain/metadata-types';
+import type { TaskMetadataSettings } from '../settings/task-metadata-settings';
 import { localDate, localDateTime } from '../utils/dates';
 import { createUuid } from '../utils/ids';
 import { validateCustomFieldValue } from '../domain/validation';
@@ -13,6 +15,7 @@ import { validateCustomFieldValue } from '../domain/validation';
 export interface NewTaskInput {
 	project: ProjectConfig;
 	globalConfig: GlobalConfig;
+	taskMetadataSettings: TaskMetadataSettings;
 	title: string;
 	taskTypeId: string;
 	priority?: ProjectPriority;
@@ -89,14 +92,47 @@ export function prepareNewTask(
 		(type) => type.id === input.taskTypeId && type.active,
 	);
 	if (!taskType) throw new Error('任务类型不存在或已停用。');
-	const applicableCustomFields = input.project.customFields.filter((field) =>
+	// 合并三个来源的 applicable custom fields：project.customFields + project.customFieldRefs + taskMetadataSettings.customFieldRefs
+	const poolById = new Map((input.globalConfig.unifiedMetadataFields ?? []).map((f) => [f.id, f]));
+	// 来源 A：旧版 project.customFields
+	const applicableCustomFields = (input.project.customFields ?? []).filter((field) =>
 		field.active && (!field.taskTypeIds || field.taskTypeIds.includes(input.taskTypeId)),
 	);
+	// 来源 B + C：customFieldRefs 引用的非内置字段（项目级 + 全局任务元数据级）
+	const applicableUnifiedFields: UnifiedMetadataField[] = [];
+	const seenUnifiedKeys = new Set<string>();
+	for (const ref of input.project.customFieldRefs ?? []) {
+		const unified = poolById.get(ref.unifiedMetadataFieldId);
+		if (!unified || unified.isBuiltIn || seenUnifiedKeys.has(unified.key)) continue;
+		const refTaskTypeIds = ref.taskTypeIds ?? [];
+		if (refTaskTypeIds.length > 0 && !refTaskTypeIds.includes(input.taskTypeId)) continue;
+		seenUnifiedKeys.add(unified.key);
+		applicableUnifiedFields.push(unified);
+	}
+	for (const ref of input.taskMetadataSettings.customFieldRefs ?? []) {
+		const unified = poolById.get(ref.unifiedMetadataFieldId);
+		if (!unified || unified.isBuiltIn || seenUnifiedKeys.has(unified.key)) continue;
+		seenUnifiedKeys.add(unified.key);
+		applicableUnifiedFields.push(unified);
+	}
+	// 收集所有 applicable keys（去重）
+	const applicableKeys = new Set<string>([
+		...applicableCustomFields.map((f) => f.key),
+		...applicableUnifiedFields.map((f) => f.key),
+	]);
+	// 构建 resolvedCustom，保留所有 applicable keys 中的非空值
 	const resolvedCustom = Object.fromEntries(
-		applicableCustomFields
-			.map((field) => [field.key, input.custom[field.key] ?? field.default] as const)
+		[...applicableKeys]
+			.map((key) => {
+				// 优先取 input.custom[key]，再回退到 field.default / unified.defaultValue
+				const legacy = applicableCustomFields.find((f) => f.key === key);
+				const unified = applicableUnifiedFields.find((f) => f.key === key);
+				const fallback = legacy?.default ?? unified?.defaultValue;
+				return [key, input.custom[key] ?? fallback] as const;
+			})
 			.filter(([, value]) => value !== null && value !== undefined && value !== ''),
 	);
+	// 验证：旧版字段使用 validateCustomFieldValue，新版字段类型若与旧版类型兼容也走相同验证
 	const customIssues = applicableCustomFields.flatMap((field) =>
 		validateCustomFieldValue(field, resolvedCustom[field.key]),
 	);

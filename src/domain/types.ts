@@ -6,6 +6,7 @@
 //   task-types.ts    — TaskMetadata, TaskDocument, TaskRelation, TaskNote, EmbeddedSubtask, TaskFormField, etc.
 //   project-types.ts — ProjectConfig, ProjectFilterDefinition, WorkflowDefinition, SavedProjectFilter, TagStyle, TagGroup
 //   dashboard-types.ts — DashboardModuleKind, DashboardModuleConfig, PersonalDashboardCardLayout, etc.
+//   metadata-types.ts — UnifiedMetadataField, UnifiedFieldType, ProjectTemplateMetadataRef, PersonMetadataRef, TaskMetadataRef
 
 export type {
 	Uuid,
@@ -90,3 +91,11 @@ export type {
 	IpDashboardModuleConfig,
 	DashboardModuleConfig,
 } from './dashboard-types';
+
+export type {
+	UnifiedFieldType,
+	UnifiedMetadataField,
+	ProjectTemplateMetadataRef,
+	PersonMetadataRef,
+	TaskMetadataRef,
+} from './metadata-types';

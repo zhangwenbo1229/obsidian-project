@@ -1,5 +1,6 @@
 import type { Uuid, IsoDate, IsoDateTime, IsoSchedule } from './common-types';
 import type { CustomFieldOption } from './person-types';
+import type { ProjectTemplateMetadataRef } from './metadata-types';
 
 export type StatusCategory = 'todo' | 'in_progress' | 'done';
 export type CompletionResult = 'completed' | 'terminated';
@@ -93,6 +94,8 @@ export interface TaskConfigurationTemplate {
 	description: string;
 	taskTypes: TaskTypeDefinition[];
 	customFields: CustomFieldDefinition[];
+	/** 迁移后使用统一元数据引用 */
+	customFieldRefs?: ProjectTemplateMetadataRef[];
 	workflow: WorkflowDefinition;
 }
 

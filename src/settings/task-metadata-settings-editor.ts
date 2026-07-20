@@ -1,4 +1,4 @@
-import { Menu, Notice, Setting } from 'obsidian';
+import { Modal, Notice, Setting } from 'obsidian';
 import { TaskMarkerPickerModal } from '../modals/task-marker-picker-modal';
 import type { ProjectManager } from '../services/project-manager';
 import { createUuid } from '../utils/ids';
@@ -10,6 +10,7 @@ import {
 	type TaskMetadataCustomFieldType,
 	type TaskMetadataDisplayField,
 	type TaskMetadataFieldPresentation,
+	type TaskMetadataRef,
 	type TaskMetadataSettings,
 } from './task-metadata-settings';
 
@@ -51,33 +52,22 @@ export class TaskMetadataSettingsEditor {
 	private render(): void {
 		if (!this.root) return;
 		this.root.empty();
-		const disabledFields = TASK_METADATA_FIELDS.filter((field) => !this.value.fields[field].enabled);
 		new Setting(this.root)
 			.setName('任务元数据字段')
-			.setDesc('内置日期与自定义任务元数据在同一列表管理；Markdown 仍保持 tasks 可识别格式。')
+			.setDesc('引用统一元数据字段池中的字段，控制任务视图与项目卡片中的显示。')
 			.addButton((button) => button
-				.setButtonText('新增任务元数据')
+				.setButtonText('添加自定义元数据')
 				.setIcon('plus')
-				.onClick((event) => {
-					const menu = new Menu();
-					for (const field of disabledFields) menu.addItem((item) => item
-						.setTitle(`添加${LABELS[field]}`)
-						.setIcon('plus')
-						.onClick(() => {
-							this.value.fields[field].enabled = true;
-							this.render();
-						}));
-					if (disabledFields.length > 0) menu.addSeparator();
-					menu.addItem((item) => item.setTitle('新增自定义任务元数据').setIcon('list-plus').onClick(() => {
-						this.addCustomField();
-						this.render();
-					}));
-					menu.showAtMouseEvent(event);
+				.setCta()
+				.onClick(() => {
+					this.addCustomFieldRef();
+					this.render();
 				}));
 		for (const field of TASK_METADATA_FIELDS.filter((item) => this.value.fields[item].enabled)) {
 			this.renderBuiltInField(field, this.value.fields[field]);
 		}
 		for (const field of this.value.customFields) this.renderCustomField(field);
+		for (const ref of this.value.customFieldRefs ?? []) this.renderCustomFieldRef(ref);
 		new Setting(this.root).addButton((button) => button.setButtonText('保存').setCta().onClick(() => void this.save()));
 	}
 
@@ -126,9 +116,43 @@ export class TaskMetadataSettingsEditor {
 		});
 	}
 
+	private addCustomFieldRef(): void {
+		const pool = this.manager.globalConfig.unifiedMetadataFields ?? [];
+		if (pool.length === 0) {
+			new Notice('暂无可用元数据字段，请先在「元数据管理」页面创建统一元数据字段。');
+			return;
+		}
+		const existingIds = new Set((this.value.customFieldRefs ?? []).map((ref) => ref.unifiedMetadataFieldId));
+		const available = pool.filter((field) => !existingIds.has(field.id));
+		if (available.length === 0) {
+			new Notice('所有元数据字段已被引用。');
+			return;
+		}
+		const modal = new Modal(this.manager.app);
+		modal.setTitle('添加自定义元数据');
+		const list = modal.contentEl.createDiv({ cls: 'op-unified-field-picker' });
+		for (const field of available) {
+			const row = list.createEl('button', { cls: 'op-unified-field-picker-item' });
+			row.createSpan({ text: `${field.name}（${field.key}）` });
+			row.createSpan({ cls: 'op-unified-field-picker-type', text: TYPE_LABELS[field.type as TaskMetadataCustomFieldType] ?? field.type });
+			row.addEventListener('click', () => {
+				const refs = this.value.customFieldRefs ?? [];
+				refs.push({
+					unifiedMetadataFieldId: field.id,
+					showInTaskView: true,
+					showInProjectCards: true,
+				});
+				this.value.customFieldRefs = refs;
+				modal.close();
+				this.render();
+			});
+		}
+		modal.open();
+	}
+
 	private renderCustomField(field: TaskMetadataCustomFieldDefinition): void {
 		const section = this.root!.createDiv({ cls: 'op-task-metadata-setting is-custom' });
-		new Setting(section).setName(field.name).setDesc('自定义任务元数据').setHeading()
+		new Setting(section).setName(field.name).setDesc('自定义任务元数据（旧版）').setHeading()
 			.addToggle((toggle) => toggle.setTooltip('必填').setValue(field.required).onChange((required) => (field.required = required)))
 			.addExtraButton((button) => button.setIcon('trash-2').setTooltip('删除任务元数据').onClick(() => {
 				this.value.customFields = this.value.customFields.filter((item) => item !== field);
@@ -158,6 +182,40 @@ export class TaskMetadataSettingsEditor {
 		}
 		if (field.type === 'single-select' || field.type === 'multi-select') this.renderOptions(section, field);
 		this.renderPresentation(section, field);
+	}
+
+	private renderCustomFieldRef(ref: TaskMetadataRef): void {
+		const pool = this.manager.globalConfig.unifiedMetadataFields ?? [];
+		const field = pool.find((f) => f.id === ref.unifiedMetadataFieldId);
+		if (!field) {
+			const section = this.root!.createDiv({ cls: 'op-task-metadata-setting is-custom' });
+			new Setting(section)
+				.setName('（已删除的元数据字段）')
+				.setDesc('该元数据字段已从统一池中移除。')
+				.setHeading()
+				.addExtraButton((button) => button.setIcon('trash-2').setTooltip('移除此引用').onClick(() => {
+					this.value.customFieldRefs = (this.value.customFieldRefs ?? []).filter((r) => r !== ref);
+					this.render();
+				}));
+			return;
+		}
+
+		const section = this.root!.createDiv({ cls: 'op-task-metadata-setting is-custom' });
+		new Setting(section).setName(field.name).setDesc('统一元数据字段').setHeading()
+			.addExtraButton((button) => button.setIcon('trash-2').setTooltip('移除此引用').onClick(() => {
+				this.value.customFieldRefs = (this.value.customFieldRefs ?? []).filter((r) => r !== ref);
+				this.render();
+			}));
+
+		// Show field info from unified pool
+		new Setting(section)
+			.setName('字段信息')
+			.setDesc(`键：${field.key} · 类型：${TYPE_LABELS[field.type as TaskMetadataCustomFieldType] ?? field.type}${field.icon ? ` · 图标：${field.icon}` : ''}`);
+
+		new Setting(section).setName('任务视图显示').addToggle((toggle) => toggle
+			.setValue(ref.showInTaskView).onChange((value) => (ref.showInTaskView = value)));
+		new Setting(section).setName('项目卡片显示').addToggle((toggle) => toggle
+			.setValue(ref.showInProjectCards).onChange((value) => (ref.showInProjectCards = value)));
 	}
 
 	private renderOptions(section: HTMLElement, field: TaskMetadataCustomFieldDefinition): void {

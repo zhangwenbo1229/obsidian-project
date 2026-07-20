@@ -2,7 +2,7 @@ import type { GlobalConfig, ProjectConfig } from '../domain/types';
 import { createUuid } from '../utils/ids';
 import { normalizePersonalDashboardSettings } from '../views/personal-dashboard-settings';
 import { normalizeProjectViewDisplay } from '../views/task-display-settings';
-import type { ConfigurationSnapshot } from '../settings/configuration-store';
+import { ConfigurationSnapshot } from '../settings/configuration-store';
 
 export function createDefaultConfiguration(): ConfigurationSnapshot {
 	const userId = createUuid();

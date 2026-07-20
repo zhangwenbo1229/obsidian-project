@@ -51,6 +51,19 @@ export function renderWorkflowEditor(
 	const nodeElements = new Map<string, HTMLElement>();
 	let connectingFrom = '';
 
+	// 根据节点位置动态计算舞台的最小尺寸，避免节点拥挤、允许滚动查看
+	const fitStageSize = () => {
+		let maxX = 0;
+		let maxY = 0;
+		for (const status of workflow.statuses) {
+			const pos = status.position ?? defaultPosition(workflow.statuses.indexOf(status));
+			maxX = Math.max(maxX, pos.x + NODE_WIDTH + 32);
+			maxY = Math.max(maxY, pos.y + NODE_HEIGHT + 32);
+		}
+		stage.style.minWidth = `${Math.max(maxX, 320)}px`;
+		stage.style.minHeight = `${Math.max(maxY, 380)}px`;
+	};
+
 	const drawEdges = () => {
 		if (!stage.isConnected) return;
 		svg.querySelectorAll('.op-workflow-edge').forEach((edge) => edge.remove());
@@ -111,27 +124,34 @@ export function renderWorkflowEditor(
 			const startY = event.clientY;
 			const origin = { ...status.position! };
 			let moved = false;
+			const prevOverflow = stage.style.overflow;
+			stage.style.overflow = 'hidden';
 			node.setPointerCapture(event.pointerId);
 			const move = (moveEvent: PointerEvent) => {
 				moved = true;
+				// 允许自由拖拽到舞台任意位置；舞台会通过 min-width/min-height + overflow:auto 滚动查看
 				status.position = {
-					x: Math.max(8, Math.min(stage.clientWidth - NODE_WIDTH - 8, origin.x + moveEvent.clientX - startX)),
+					x: Math.max(8, origin.x + moveEvent.clientX - startX),
 					y: Math.max(8, origin.y + moveEvent.clientY - startY),
 				};
 				node.style.left = `${status.position.x}px`;
 				node.style.top = `${status.position.y}px`;
+				fitStageSize();
 				drawEdges();
 			};
 			const finish = () => {
-				node.removeEventListener('pointermove', move);
+				document.removeEventListener('pointermove', move);
+				node.releasePointerCapture(event.pointerId);
+				stage.style.overflow = prevOverflow;
 				if (moved) render();
 			};
-			node.addEventListener('pointermove', move);
+			document.addEventListener('pointermove', move);
 			node.addEventListener('pointerup', finish, { once: true });
 			node.addEventListener('pointercancel', finish, { once: true });
 		});
 		nodeElements.set(status.id, node);
 	}
+	fitStageSize();
 	stage.ownerDocument.defaultView?.requestAnimationFrame(drawEdges);
 
 	const editor = container.createDiv({ cls: 'op-workflow-editor' });

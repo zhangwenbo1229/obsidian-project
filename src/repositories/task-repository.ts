@@ -24,7 +24,7 @@ export class TaskRepository {
 
 	async read(path: string, project: ProjectConfig): Promise<TaskParseResult> {
 		return parseTaskMarkdown(await this.vault.read(path), {
-			customFieldKeys: new Set(project.customFields.map((field) => field.key)),
+			customFieldKeys: new Set((project.customFields ?? []).map((field) => field.key)),
 		});
 	}
 
@@ -36,7 +36,7 @@ export class TaskRepository {
 	): Promise<void> {
 		await this.vault.process(path, (current) => {
 			const parsed = parseTaskMarkdown(current, {
-				customFieldKeys: new Set(project.customFields.map((field) => field.key)),
+				customFieldKeys: new Set((project.customFields ?? []).map((field) => field.key)),
 			});
 			if (parsed.document) {
 				document = baseline

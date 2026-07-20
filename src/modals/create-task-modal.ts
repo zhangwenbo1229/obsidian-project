@@ -70,12 +70,13 @@ export class CreateTaskModal extends TaskModalBase {
 				this.taskTypeId = this.project?.taskTypes.find((type) => type.active)?.id ?? '';
 				this.bodyDrafts = {};
 				this.fieldDrafts = {};
+				this.custom = {};
 				this.body = this.currentTemplate() ?? '';
 				this.applyTaskTypeDefaults();
 				this.render();
 			});
 		});
-		new Setting(identityEl).setName('任务类型').addDropdown((dropdown) => {
+		new Setting(identityEl).setName('项目类型').addDropdown((dropdown) => {
 			for (const type of this.project?.taskTypes.filter((item) => item.active) ?? []) {
 				dropdown.addOption(type.id, type.name);
 			}
@@ -91,11 +92,16 @@ export class CreateTaskModal extends TaskModalBase {
 				this.taskTypeId = value;
 				this.body = switched.body;
 				this.applyFieldValues(switchedFields.values);
+				this.custom = {};
 				this.render();
 			});
 		});
 
 		// 共享表单字段
+		const currentTemplate = this.manager.taskTemplates.find((t) =>
+			t.taskTypes.some((tt) => tt.id === this.taskTypeId),
+		);
+		const effectiveCustomFieldRefs = currentTemplate?.customFieldRefs ?? [];
 		const ctx: TaskFormContext = {
 			manager: this.manager,
 			state: this.buildFormState(),
@@ -116,6 +122,7 @@ export class CreateTaskModal extends TaskModalBase {
 			onRerender: () => this.render(),
 			renderRelations: (container) => this.renderRelations(container),
 			renderNotes: (container) => this.renderNotes(container),
+			effectiveCustomFieldRefs,
 		};
 		this.renderCommonSections(shell, ctx);
 

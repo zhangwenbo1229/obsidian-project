@@ -31,13 +31,13 @@ export function formatCustomFieldValue(
 export function formatTaskCustomFields(task: IndexedTask, manager: ProjectManager): string {
 	const values = task.document.metadata.custom;
 	const configured = task.project.customFields
-		.filter((field) => Object.prototype.hasOwnProperty.call(values, field.key))
+		?.filter((field) => Object.prototype.hasOwnProperty.call(values, field.key))
 		.map((field) => formatCustomFieldValue(field, values[field.key], manager.globalConfig.people))
 		.filter(Boolean);
-	const known = new Set(task.project.customFields.map((field) => field.key));
+	const known = new Set((task.project.customFields ?? []).map((field) => field.key));
 	const unknown = Object.entries(values)
 		.filter(([key]) => !known.has(key))
 		.map(([, value]) => Array.isArray(value) ? value.map(primitiveValue).filter(Boolean).join(', ') : primitiveValue(value))
 		.filter(Boolean);
-	return [...configured, ...unknown].join(' · ');
+	return [...configured ?? [], ...unknown].join(' · ');
 }

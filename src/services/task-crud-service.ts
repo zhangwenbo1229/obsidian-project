@@ -12,12 +12,16 @@ import { parseEmbeddedSubtasks, removeEmbeddedSubtask, upsertEmbeddedSubtask } f
 export class TaskCrudService {
 	constructor(private readonly manager: ProjectManager) {}
 
-	async create(input: Omit<NewTaskInput, 'globalConfig'>): Promise<string> {
+	async create(input: Omit<NewTaskInput, 'globalConfig' | 'taskMetadataSettings'>): Promise<string> {
 		const existingKeys = new Set(
 			this.manager.index.validTasks().map((task) => task.document.metadata.key),
 		);
 		const prepared = prepareNewTask(
-			{ ...input, globalConfig: this.manager.globalConfig },
+			{
+				...input,
+				globalConfig: this.manager.globalConfig,
+				taskMetadataSettings: this.manager.taskMetadataSettings,
+			},
 			existingKeys,
 		);
 		input.project.nextNumber = prepared.nextNumber;
@@ -65,7 +69,7 @@ export class TaskCrudService {
 		} else if (code === 'duplicate-key' || code === 'duplicate-uuid' || code === 'missing-section') {
 			const source = await this.manager.vault.read(path);
 			const parsed = parseTaskMarkdown(source, {
-				customFieldKeys: new Set(projects.flatMap((p) => p.customFields.map((f) => f.key))),
+				customFieldKeys: new Set(projects.flatMap((p) => (p.customFields ?? []).map((f) => f.key))),
 			});
 			if (!parsed.document) throw new Error('任务文件无法解析。');
 			const project = projects.find((p) => p.uid === parsed.document?.metadata.projectUid);

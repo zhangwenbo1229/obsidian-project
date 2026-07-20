@@ -8,6 +8,7 @@ import { renderTaskPriority } from './task-priority-presentation';
 import { renderTaskTitle } from './task-type-presentation';
 import { renderTaskMarker } from './task-type-presentation';
 import { renderTags } from './tag-presentation';
+import { resolvePersonNamePresentation } from '../services/person-metadata';
 import { formatCustomFieldValue, formatTaskCustomFields } from './custom-field-presentation';
 import { renderTaskRelations } from './task-relation-presentation';
 import { enhanceRenderedTaskLists } from './subtask-presentation';
@@ -51,7 +52,10 @@ function personField(
 	presentation?: FieldPresentation,
 ): void {
 	const person = manager.globalConfig.people.find((item) => item.id === personId);
-	const namePresentation = manager.globalConfig.personNamePresentation;
+	const namePresentation = resolvePersonNamePresentation(
+		manager.globalConfig.personNamePresentation,
+		manager.globalConfig.unifiedMetadataFields ?? [],
+	);
 	const nameFieldPresentation: FieldPresentation = {
 		icon: namePresentation?.icon || presentation?.icon,
 		color: namePresentation?.color || presentation?.color,
@@ -73,7 +77,7 @@ function personField(
 }
 
 function taskCustomFields(manager: ProjectManager) {
-	return [...new Map(manager.projects.flatMap((project) => project.customFields).map((field) => [field.key, field])).values()];
+	return [...new Map(manager.projects.flatMap((project) => project.customFields ?? []).map((field) => [field.key, field])).values()];
 }
 
 export function renderTaskMarkdownValue(
@@ -116,7 +120,7 @@ export function renderTaskCardFields(
 	const flow = parent.createDiv({ cls: options.compact ? 'op-task-field-flow is-compact' : 'op-task-field-flow' });
 	const metadata = task.document.metadata;
 	const taskType = task.project.taskTypes.find((type) => type.id === metadata.taskTypeId);
-	const presentation = (field: TaskDisplayField) => resolveTaskFieldPresentation(task, field);
+	const presentation = (field: TaskDisplayField) => resolveTaskFieldPresentation(task, field, manager);
 	const renderKey = (container: HTMLElement) => {
 		const key = container.createSpan({ cls: 'op-task-key' });
 		if (options.markerBeforeKey) renderTaskMarker(key, taskType);
@@ -183,7 +187,7 @@ export function renderTaskCardFields(
 		}
 		else if (field === 'customFields') labeledField(flow, field, formatTaskCustomFields(task, manager), manager);
 		else if (field.startsWith('custom:')) {
-			const definition = task.project.customFields.find((item) => item.key === field.slice('custom:'.length));
+			const definition = (task.project.customFields ?? []).find((item) => item.key === field.slice('custom:'.length));
 			if (definition) labeledField(flow, field, formatCustomFieldValue(definition, metadata.custom[definition.key], manager.globalConfig.people), manager, presentation(field));
 		}
 		else if (field === 'relations' && task.document.relations.some((relation) => relation.type === 'related')) {
@@ -211,7 +215,7 @@ export function renderTaskListField(
 	field: TaskDisplayField,
 	component: Component,
 ): void {
-	const presentation = resolveTaskFieldPresentation(task, field);
+	const presentation = resolveTaskFieldPresentation(task, field, manager);
 	applyValuePresentation(parent, presentation);
 	if (presentation.icon) applyLabelPresentation(parent, { icon: presentation.icon });
 	const metadata = task.document.metadata;
@@ -237,7 +241,7 @@ function taskFieldText(task: IndexedTask, manager: ProjectManager, field: TaskDi
 	const metadata = task.document.metadata;
 	const person = (id: string | null) => manager.globalConfig.people.find((item) => item.id === id)?.name ?? '';
 	if (field.startsWith('custom:')) {
-		const definition = task.project.customFields.find((item) => item.key === field.slice('custom:'.length));
+		const definition = (task.project.customFields ?? []).find((item) => item.key === field.slice('custom:'.length));
 		return definition ? formatCustomFieldValue(definition, metadata.custom[definition.key], manager.globalConfig.people) : '';
 	}
 	const values: Partial<Record<TaskDisplayField, string>> = {

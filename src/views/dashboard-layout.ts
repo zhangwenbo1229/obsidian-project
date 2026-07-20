@@ -6,10 +6,22 @@ import type {
 	PersonalDashboardCardLayout,
 	TaskDisplayField,
 } from '../domain/types';
-import { expandCustomDisplayFields } from './task-display-settings';
+import { expandCustomDisplayFields, TASK_DISPLAY_FIELDS } from './task-display-settings';
 import { DASHBOARD_MODULE_CATALOG, isDashboardModuleKind, normalizeDashboardModuleConfig } from './dashboard-modules/config';
 
 const DEFAULT_LIST_FIELDS: TaskDisplayField[] = ['key', 'title', 'status', 'assignee', 'dueDate', 'tags'];
+
+function filterDisplayFields(
+	fields: readonly TaskDisplayField[],
+	customFields?: readonly Pick<CustomFieldDefinition, 'key' | 'name'>[],
+): TaskDisplayField[] {
+	const allowed = new Set<TaskDisplayField>([
+		...TASK_DISPLAY_FIELDS,
+		'customFields',
+		...(customFields ?? []).map((field) => `custom:${field.key}` as const),
+	]);
+	return [...new Set(fields.filter((field): field is TaskDisplayField => allowed.has(field as TaskDisplayField)))];
+}
 
 const DEFAULTS: Array<[PersonalDashboardCardId, number, number, DashboardCardKind, DashboardMetric]> = [
 	['completed', 1, 1, 'number', 'completed'],
@@ -79,7 +91,7 @@ function normalizeCard(
 		filterId: card.filterId ?? null,
 		kind,
 		metric,
-		displayFields: expandCustomDisplayFields(card.displayFields?.length ? card.displayFields : DEFAULT_LIST_FIELDS, customFields),
+		displayFields: filterDisplayFields(expandCustomDisplayFields(card.displayFields?.length ? card.displayFields : DEFAULT_LIST_FIELDS, customFields), customFields),
 		taskListDirection: card.taskListDirection === 'vertical' ? 'vertical' : 'horizontal',
 		title: card.title?.trim() || undefined,
 		numberColor: card.numberColor?.trim() || undefined,
@@ -148,7 +160,7 @@ export function deleteDashboardCard(
 	cardId: PersonalDashboardCardId,
 ): PersonalDashboardCardLayout[] {
 	return normalizeDashboardLayout(layout)
-		.filter((card) => card.id !== cardId || BUILT_IN_DASHBOARD_CARD_IDS.has(card.id))
+		.filter((card) => card.id !== cardId)
 		.map((card, order) => ({ ...card, order }));
 }
 

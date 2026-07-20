@@ -62,9 +62,9 @@ const context = await esbuild.context({
 	target: 'es2021',
 	logLevel: 'info',
 	sourcemap: prod ? false : 'inline',
-	treeShaking: true,
+	treeShaking: false,
 	outfile: 'main.js',
-	minify: prod,
+	minify: false,
 	plugins: prod ? [] : [deployOnSuccessfulWatchBuild],
 });
 

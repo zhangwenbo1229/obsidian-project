@@ -172,7 +172,7 @@ describe('project validation', () => {
 
 	it('rejects reserved custom keys and templates containing reserved sections', () => {
 		const project = makeProject();
-		project.customFields.push({ id: 'field', key: 'title', name: '冲突字段', type: 'text', required: false, active: true, default: null });
+		(project.customFields ?? []).push({ id: 'field', key: 'title', name: '冲突字段', type: 'text', required: false, active: true, default: null });
 		project.taskTypes[0]!.template = '## 备注\n不允许';
 		const result = validateProjectConfig(project);
 		expect(result.success).toBe(false);
@@ -181,7 +181,7 @@ describe('project validation', () => {
 
 	it('keeps the legacy priority custom-field key available beside built-in task priority', () => {
 		const project = makeProject();
-		project.customFields.push({ id: 'priority', key: 'priority', name: '优先级', type: 'text', required: false, active: true, default: null });
+		(project.customFields ?? []).push({ id: 'priority', key: 'priority', name: '优先级', type: 'text', required: false, active: true, default: null });
 		expect(validateProjectConfig(project).issues).not.toContainEqual(
 			expect.objectContaining({ code: 'invalid-custom-field-key' }),
 		);

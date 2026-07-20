@@ -147,18 +147,6 @@
 .op-priority.is-medium { background: #fff7d6; color: #7f5f01; }
 .op-priority.is-low { background: #e9f2ff; color: #0747a6; }
 
-.op-template-catalog {
-	grid-template-columns: minmax(0, 1fr);
-	grid-template-rows: auto minmax(0, 1fr);
-}
-.op-template-catalog-list {
-	flex-flow: row wrap;
-	padding: 0 0 12px;
-	border-right: 0;
-	border-bottom: 1px solid var(--background-modifier-border);
-}
-.op-template-list-item { min-width: 180px; }
-
 .op-builtin-tag-input {
 	width: 100%;
 	min-width: 80px;
@@ -219,11 +207,11 @@
 
 .op-grouped-tag-picker { display: grid; gap: 8px; margin: 10px 0; }
 .op-grouped-tag-picker-heading { display: flex; align-items: center; justify-content: space-between; }
-.op-grouped-tag-picker-workspace { display: grid; grid-template-columns: minmax(112px, 0.32fr) minmax(0, 1fr); gap: 12px; }
-.op-grouped-tag-picker-groups { display: grid; min-width: 0; align-content: start; gap: 6px; padding-right: 10px; border-right: 1px solid var(--background-modifier-border); }
-.op-grouped-tag-picker-group-label { color: var(--text-muted); font-size: var(--font-ui-smaller); font-weight: 600; }
-.op-grouped-tag-picker-group-select { width: 100%; min-width: 0; }
-.op-grouped-tag-picker-search { display: grid; min-width: 0; align-content: start; gap: 6px; }
+.op-grouped-tag-picker-workspace { display: grid; gap: 6px; }
+.op-grouped-tag-picker-row { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+.op-grouped-tag-picker-group-label { color: var(--text-muted); font-size: var(--font-ui-smaller); font-weight: 600; white-space: nowrap; }
+.op-grouped-tag-picker-group-select { min-width: 110px; max-width: 180px; flex: 0 0 auto; }
+.op-grouped-tag-picker-input { flex: 1 1 auto; min-width: 0; }
 .op-grouped-tag-picker-selected { display: flex; min-height: 24px; flex-wrap: wrap; gap: 5px; }
 .op-grouped-tag-picker-chip { min-height: 24px; padding: 2px 7px; border: 1px solid var(--background-modifier-border); border-radius: 4px; background: var(--background-secondary); }
 .op-grouped-tag-picker-suggestions { display: none; max-height: 170px; overflow-y: auto; border: 1px solid var(--background-modifier-border); border-radius: 4px; }
@@ -232,10 +220,6 @@
 .op-grouped-tag-picker-suggestion:hover, .op-grouped-tag-picker-suggestion.is-highlighted { background: var(--background-modifier-hover); }
 .op-grouped-tag-picker-suggestion.is-create { color: var(--text-accent); }
 
-@media (max-width: 600px) {
-	.op-grouped-tag-picker-workspace { grid-template-columns: 1fr; }
-	.op-grouped-tag-picker-groups { padding: 0 0 8px; border-right: 0; border-bottom: 1px solid var(--background-modifier-border); }
-}
 .op-embedded-subtask-list { display: grid; min-width: 0; width: 100%; max-width: 100%; gap: 4px; overflow: visible; }
 .op-embedded-subtask { display: grid; min-width: 0; width: 100%; max-width: 100%; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 7px; overflow: visible; background: transparent; }
 .op-embedded-subtask-checkbox { width: 15px; height: 15px; margin: 2px 0 0; accent-color: var(--interactive-accent); }
@@ -374,6 +358,9 @@ button.op-task-view-group-heading,
 .op-person-metadata-settings { display: grid; gap: 10px; margin: 18px 0; }
 .op-person-metadata-field { padding: 8px 10px; border: 1px solid var(--background-modifier-border); border-radius: 6px; background: var(--background-secondary); }
 .op-person-metadata-field .setting-item { min-width: 0; }
+.op-person-metadata-field[draggable="true"] { cursor: grab; }
+.op-person-metadata-field.is-dragging { opacity: 0.5; }
+.op-person-metadata-field.is-drag-over { border-color: var(--interactive-accent); box-shadow: 0 0 0 2px var(--interactive-accent); }
 .op-person-metadata-multi-select { display: flex; min-width: 0; flex-wrap: wrap; gap: 6px 12px; }
 .op-person-metadata-multi-select label { display: inline-flex; align-items: center; gap: 5px; }
 .op-person-field-button { cursor: pointer; }
@@ -382,8 +369,6 @@ button.op-task-view-group-heading,
 
 @media (max-width: 900px) {
 	.op-task-custom-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-	.op-template-catalog { grid-template-columns: 1fr; }
-	.op-template-catalog-list { border-right: 0; border-bottom: 1px solid var(--background-modifier-border); padding: 0 0 12px; }
 	.op-workflow-canvas { grid-template-columns: 1fr; }
 	.op-dashboard-workspace { grid-template-columns: repeat(2, minmax(160px, 1fr)); }
 	.op-dashboard-card { grid-column: auto / span 1 !important; grid-row: auto / span var(--op-dashboard-row-span, 1) !important; }

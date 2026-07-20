@@ -342,7 +342,7 @@ export class ProjectView extends ItemView {
 		}
 		for (const [key, values] of Object.entries(this.customFilters)) {
 			if (values.size === 0) continue;
-			const name = project?.customFields.find((field) => field.key === key)?.name ?? key;
+			const name = project?.customFields?.find((field) => field.key === key)?.name ?? key;
 			labels.push(`${name}：${[...values].join('、')}`);
 		}
 		return labels;
@@ -426,7 +426,7 @@ export class ProjectView extends ItemView {
 			from.addEventListener('change', () => { range.setFrom(from.value); this.render(); });
 			to.addEventListener('change', () => { range.setTo(to.value); this.render(); });
 		}
-		const customFields = [...new Map(projects.flatMap((item) => item.customFields).map((field) => [field.key, field])).values()];
+		const customFields = [...new Map(projects.flatMap((item) => item.customFields ?? []).map((field) => [field.key, field])).values()];
 		for (const field of this.filterFields.has('customFields') ? customFields.filter((item) => item.type === 'single-select' || item.type === 'multi-select') : []) {
 			const selected = this.customFilters[field.key] ??= new Set();
 			addMulti('customFields', (field.options ?? []).map((option) => ({ value: option.id, label: option.name })), selected as Set<string>, field.name, field.key);
@@ -497,7 +497,7 @@ export class ProjectView extends ItemView {
 			links: { id: 'links', name: '链接' },
 			subtasks: { id: 'subtasks', name: '任务' },
 		};
-		const customFields = [...new Map(this.scopedProjects().flatMap((item) => item.customFields).map((field) => [field.key, field])).values()];
+		const customFields = [...new Map(this.scopedProjects().flatMap((item) => item.customFields ?? []).map((field) => [field.key, field])).values()];
 		return fields.flatMap((field) => {
 			if (field === 'customFields') return customFields.map((customField) => ({ id: `custom:${customField.key}`, name: customField.name }));
 			if (field.startsWith('custom:')) {
@@ -513,7 +513,7 @@ export class ProjectView extends ItemView {
 		const person = (id: string | null) => this.manager.globalConfig.people.find((item) => item.id === id)?.name ?? '';
 		if (column.startsWith('custom:')) {
 			const key = column.slice(7);
-			const field = task.project.customFields.find((item) => item.key === key);
+			const field = (task.project.customFields ?? []).find((item) => item.key === key);
 			return field ? formatCustomFieldValue(field, metadata.custom[key], this.manager.globalConfig.people) : '';
 		}
 		return {

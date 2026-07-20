@@ -8,11 +8,15 @@ import { normalizeTaskFieldConfig } from './task-field-configuration';
 import { TemplateFieldEditor } from './template-field-editor';
 
 function newTemplate(): TaskConfigurationTemplate {
+	const fieldConfig = normalizeTaskFieldConfig();
+	// 新模板默认关闭项目描述和备注
+	if (fieldConfig?.body) fieldConfig.body.enabled = false;
+	if (fieldConfig?.notes) fieldConfig.notes.enabled = false;
 	return {
 		id: createUuid(),
 		name: '新项目类型模板',
 		description: '',
-		taskTypes: [{ id: `type-${createUuid().slice(0, 8)}`, name: '新项目类型', icon: 'circle-check', color: '#0c66e4', marker: 'circle-check', titleColor: '#0c66e4', active: true, template: '', fieldConfig: normalizeTaskFieldConfig() }],
+		taskTypes: [{ id: `type-${createUuid().slice(0, 8)}`, name: '新项目类型', icon: 'circle-check', color: '#0c66e4', marker: 'circle-check', titleColor: '#0c66e4', active: true, template: '', fieldConfig }],
 		customFields: [],
 		workflow: {
 			initialStatusId: 'waiting',

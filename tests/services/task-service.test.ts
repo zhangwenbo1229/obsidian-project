@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { GlobalConfig, ProjectConfig } from '../../src/domain/types';
 import { applyTaskTemplate, prepareNewTask, resolveTaskTypeTemplate, switchTaskTypeDraft } from '../../src/services/task-service';
 import * as taskService from '../../src/services/task-service';
+import { normalizeTaskMetadataSettings } from '../../src/settings/task-metadata-settings';
 
 const globalConfig: GlobalConfig = {
 	kind: 'global-config', schema: 1, projectConfigDirectory: '项目管理/项目配置',
@@ -12,6 +13,7 @@ const globalConfig: GlobalConfig = {
 	],
 	personMetadataFields: [],
 };
+const taskMetadataSettings = normalizeTaskMetadataSettings();
 const project: ProjectConfig = {
 	kind: 'project', schema: 1, uid: '778de407-26bf-45ee-b22e-cf1f0bc826ce', code: 'PROJ', name: '项目', active: true,
 	taskDirectory: '项目管理/任务/PROJ', groupByMonth: true, nextNumber: 3,
@@ -32,7 +34,7 @@ describe('task creation preparation', () => {
 
 	it('uses the next unused number and original local creation month', () => {
 		const prepared = prepareNewTask({
-			project, globalConfig, title: '新任务', taskTypeId: 'task', assigneeId: null,
+			project, globalConfig, taskMetadataSettings, title: '新任务', taskTypeId: 'task', assigneeId: null,
 			startDate: null, dueDate: null, tags: [], custom: {}, body: '',
 		}, new Set(['PROJ-3']), new Date('2026-01-15T10:00:00+08:00'), () => '550e8400-e29b-41d4-a716-446655440000');
 
@@ -44,29 +46,29 @@ describe('task creation preparation', () => {
 
 	it('rejects missing required custom fields', () => {
 		const configured = structuredClone(project);
-		configured.customFields.push({ id: 'severity', key: 'severity', name: '严重程度', type: 'text', required: true, active: true, default: null });
+		(configured.customFields ?? []).push({ id: 'severity', key: 'severity', name: '严重程度', type: 'text', required: true, active: true, default: null });
 		expect(() => prepareNewTask({
-			project: configured, globalConfig, title: '新任务', taskTypeId: 'task', assigneeId: null,
+			project: configured, globalConfig, taskMetadataSettings, title: '新任务', taskTypeId: 'task', assigneeId: null,
 			startDate: null, dueDate: null, tags: [], custom: {}, body: '',
 		}, new Set(), new Date(), () => '550e8400-e29b-41d4-a716-446655440000')).toThrow('必填');
 	});
 
 	it('applies configured custom field defaults', () => {
 		const configured = structuredClone(project);
-		configured.customFields.push({ id: 'severity', key: 'severity', name: '严重程度', type: 'text', required: false, active: true, default: '普通' });
-		const prepared = prepareNewTask({ project: configured, globalConfig, title: '新任务', taskTypeId: 'task', assigneeId: null, startDate: null, dueDate: null, tags: [], custom: {}, body: '' }, new Set(), new Date(), () => '550e8400-e29b-41d4-a716-446655440000');
+		(configured.customFields ?? []).push({ id: 'severity', key: 'severity', name: '严重程度', type: 'text', required: false, active: true, default: '普通' });
+		const prepared = prepareNewTask({ project: configured, globalConfig, taskMetadataSettings, title: '新任务', taskTypeId: 'task', assigneeId: null, startDate: null, dueDate: null, tags: [], custom: {}, body: '' }, new Set(), new Date(), () => '550e8400-e29b-41d4-a716-446655440000');
 		expect(prepared.document.metadata.custom).toEqual({ severity: '普通' });
 	});
 
 	it('raises a stale project counter above the highest historical key', () => {
 		const configured = structuredClone(project); configured.nextNumber = 1;
-		const prepared = prepareNewTask({ project: configured, globalConfig, title: '同步后任务', taskTypeId: 'task', assigneeId: null, startDate: null, dueDate: null, tags: [], custom: {}, body: '' }, new Set(['PROJ-100']), new Date(), () => '550e8400-e29b-41d4-a716-446655440000');
+		const prepared = prepareNewTask({ project: configured, globalConfig, taskMetadataSettings, title: '同步后任务', taskTypeId: 'task', assigneeId: null, startDate: null, dueDate: null, tags: [], custom: {}, body: '' }, new Set(['PROJ-100']), new Date(), () => '550e8400-e29b-41d4-a716-446655440000');
 		expect(prepared.document.metadata.key).toBe('PROJ-101');
 	});
 
 	it('keeps markdown links and creates an initial markdown note', () => {
 		const prepared = prepareNewTask({
-			project, globalConfig, title: 'Documented task', taskTypeId: 'task', assigneeId: null,
+			project, globalConfig, taskMetadataSettings, title: 'Documented task', taskTypeId: 'task', assigneeId: null,
 			startDate: null, dueDate: null, tags: [], custom: {}, body: '# Body',
 			links: '- [[Architecture]]\n- https://example.com/spec',
 			note: '**Review** this with the team.',
@@ -104,7 +106,7 @@ describe('task creation preparation', () => {
 
 	it('creates Markdown subtasks, related tasks, and a note for the selected author', () => {
 		const input = {
-			project, globalConfig, title: 'Configured task', taskTypeId: 'task', assigneeId: null,
+			project, globalConfig, taskMetadataSettings, title: 'Configured task', taskTypeId: 'task', assigneeId: null,
 			reporterId: '9b67a66f-0109-47b3-9463-5d05b4295949', startDate: null, dueDate: null,
 			tags: [], custom: {}, body: '', subtasks: '- [ ] 子任务 A',
 			note: '由李四记录', noteAuthorId: '9b67a66f-0109-47b3-9463-5d05b4295949',

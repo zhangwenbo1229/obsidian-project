@@ -21,7 +21,7 @@ export class MigrationManagerService {
 		fieldId: string,
 		newKey: string,
 	): Promise<void> {
-		const field = project.customFields.find((item) => item.id === fieldId);
+		const field = (project.customFields ?? []).find((item) => item.id === fieldId);
 		if (!field) throw new Error('自定义字段不存在。');
 		if (field.key === newKey) return;
 		const entries = this.pm.index.validTasks().filter((task) => task.project.uid === project.uid);
@@ -295,7 +295,7 @@ export class MigrationManagerService {
 			const finalization = state.finalization;
 			if (finalization.type === 'custom-field-key') {
 				const project = this.pm.projects.find((candidate) => candidate.uid === finalization.projectUid);
-				const field = project?.customFields.find((candidate) => candidate.id === finalization.fieldId);
+				const field = (project?.customFields ?? []).find((candidate) => candidate.id === finalization.fieldId);
 				if (!project || !field) throw new Error('无法完成自定义字段键迁移：项目或字段不存在。');
 				field.key = finalization.newKey;
 				this.pm.replaceProject(project);

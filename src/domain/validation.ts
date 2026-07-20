@@ -299,7 +299,7 @@ export function validateTaskReferences(
 	} else if (task.completedAt || task.terminatedAt) {
 		issues.push(issue('unexpected-ending-date', 'statusId', '未结束任务不能填写完成或终止日期。'));
 	}
-	for (const field of project.customFields) {
+	for (const field of project.customFields ?? []) {
 		issues.push(...validateCustomFieldValue(field, task.custom[field.key]));
 	}
 	return issues;

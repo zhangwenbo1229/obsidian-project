@@ -30,6 +30,7 @@ import { type NewTaskInput } from './task-service';
 import { type TransferMapping } from './migration-service';
 import {
 	loadOrMigrateConfiguration,
+	CURRENT_CONFIGURATION_SCHEMA,
 	type ConfigurationSnapshot,
 	type ConfigurationStore,
 } from '../settings/configuration-store';
@@ -144,7 +145,7 @@ export class ProjectManager {
 	}
 
 	private async rebuildTaskIndex(): Promise<void> {
-		const customKeys = new Set(this.projects.flatMap((project) => project.customFields.map((field) => field.key)));
+		const customKeys = new Set(this.projects.flatMap((project) => (project.customFields ?? []).map((field) => field.key)));
 		const sources = await this.taskRepository.listSources(this.projects.map((project) => project.taskDirectory));
 		const parsed = await mapConcurrent(sources, 8, ({ path, source }) => this.parseIndexedTask(path, customKeys, source));
 		const tasks = parsed.filter((task): task is IndexedTask => task !== null);
@@ -165,7 +166,7 @@ export class ProjectManager {
 	}
 
 	async refreshPaths(paths: readonly string[]): Promise<void> {
-		const customKeys = new Set(this.projects.flatMap((project) => project.customFields.map((field) => field.key)));
+		const customKeys = new Set(this.projects.flatMap((project) => (project.customFields ?? []).map((field) => field.key)));
 		for (const path of new Set(paths)) {
 			if (!path.endsWith('.md') || !(await this.vault.exists(path))) {
 				this.index.remove(path);
@@ -316,6 +317,7 @@ export class ProjectManager {
 
 	private snapshot(): ConfigurationSnapshot {
 		return createProjectManagerConfigurationSnapshot({
+			configurationSchema: CURRENT_CONFIGURATION_SCHEMA,
 			globalConfig: structuredClone(this.globalConfig),
 			projects: structuredClone(this.projects),
 			tagOrder: [...this.tagOrder],
@@ -336,6 +338,7 @@ export class ProjectManager {
 	async saveTaskMetadataSettings(settings: TaskMetadataSettings): Promise<void> {
 		this.taskMetadataSettings = normalizeTaskMetadataSettings(settings);
 		await this.persistConfiguration();
+		await this.reload();
 		for (const listener of this.listeners) listener();
 	}
 
@@ -434,6 +437,12 @@ export class ProjectManager {
 		if (!validation.success) throw new Error(validation.issues.map((issue) => issue.message).join('\n'));
 		await this.persistConfiguration();
 		await this.reload();
+	}
+
+	async saveUnifiedMetadataFields(): Promise<void> {
+		await this.persistConfiguration();
+		await this.reload();
+		for (const listener of this.listeners) listener();
 	}
 
 	async saveProject(project: ProjectConfig): Promise<void> {
@@ -562,7 +571,7 @@ export class ProjectManager {
 		return this.migrations.transferTaskTree(entry, target, mapping);
 	}
 
-	async createTask(input: Omit<NewTaskInput, 'globalConfig'>): Promise<string> {
+	async createTask(input: Omit<NewTaskInput, 'globalConfig' | 'taskMetadataSettings'>): Promise<string> {
 		return this.taskCrud.create(input);
 	}
 

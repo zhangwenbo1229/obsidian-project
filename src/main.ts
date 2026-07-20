@@ -5,13 +5,14 @@ import { ObsidianProjectSettingTab } from './settings/settings-tab';
 import { PERSONAL_VIEW_TYPE, PersonalView } from './views/personal-view';
 import { PROJECT_VIEW_TYPE, ProjectView } from './views/project-view';
 import { TASK_VIEW_TYPE, TaskView } from './views/task-view';
-import type { ConfigurationSnapshot } from './settings/configuration-store';
+import { ConfigurationSnapshot } from './settings/configuration-store';
 import { registerBuiltinTagEditor } from './integrations/builtin-tag-editor';
 import { registerBuiltinPropertyEditor } from './integrations/builtin-property-editor';
 import { PropertyStyleModal } from './modals/property-style-modal';
 import { PropertyGroupModal } from './modals/property-group-modal';
 import { decorateMarkdownReferencesWhenReady } from './integrations/markdown-reference-renderer';
 import { registerFileWatcher } from './services/file-watcher-service';
+import { resolvePersonNamePresentation } from './services/person-metadata';
 
 interface PluginData {
 	legacyGlobalConfigPath: string;
@@ -20,6 +21,7 @@ interface PluginData {
 
 export default class ObsidianProjectPlugin extends Plugin {
 	manager!: ProjectManager;
+	settingsTab!: ObsidianProjectSettingTab;
 	settings: PluginData = {
 		legacyGlobalConfigPath: '项目管理/全局配置.md',
 		configuration: null,
@@ -60,7 +62,10 @@ export default class ObsidianProjectPlugin extends Plugin {
 				color: task.project.taskTypes.find((type) => type.id === task.document.metadata.taskTypeId)?.titleColor,
 			})),
 			() => this.manager.globalConfig.people.map((person) => {
-				const presentation = this.manager.globalConfig.personNamePresentation;
+				const presentation = resolvePersonNamePresentation(
+					this.manager.globalConfig.personNamePresentation,
+					this.manager.globalConfig.unifiedMetadataFields ?? [],
+				);
 				return {
 					name: person.name,
 					sourcePath: person.sourcePath,
@@ -70,7 +75,8 @@ export default class ObsidianProjectPlugin extends Plugin {
 				};
 			}),
 		));
-		this.addSettingTab(new ObsidianProjectSettingTab(this.app, this));
+		this.settingsTab = new ObsidianProjectSettingTab(this.app, this);
+	this.addSettingTab(this.settingsTab);
 		this.addRibbonIcon('layout-dashboard', '打开个人仪表盘', () => void this.activatePersonalView());
 		this.addRibbonIcon('panels-top-left', '打开项目视图', () => void this.activateProjectView());
 		this.addRibbonIcon('list-checks', '打开任务视图', () => void this.activateTaskView());

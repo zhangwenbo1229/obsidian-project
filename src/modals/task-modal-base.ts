@@ -51,6 +51,8 @@ export interface TaskFormContext {
 	onRerender: () => void;
 	renderRelations?: (container: HTMLElement) => void;
 	renderNotes?: (container: HTMLElement) => void;
+	/** 当前项目类型对应模板的 customFieldRefs；提供时优先于 project.customFieldRefs */
+	effectiveCustomFieldRefs?: { unifiedMetadataFieldId: string; taskTypeIds?: string[] }[];
 }
 
 export abstract class TaskModalBase extends Modal {
@@ -65,35 +67,58 @@ export abstract class TaskModalBase extends Modal {
 		this.markdownEditors = [];
 	}
 
+	/** 从 taskMetadataSettings.customFieldRefs 解析被引用的字段 key 集合 */
+	protected getCustomFieldRefKeys(manager: ProjectManager): Set<string> {
+		const refs = manager.taskMetadataSettings.customFieldRefs ?? [];
+		const pool = manager.globalConfig.unifiedMetadataFields ?? [];
+		const poolById = new Map(pool.map((f) => [f.id, f]));
+		const refKeys = new Set<string>();
+		for (const ref of refs) {
+			const unified = poolById.get(ref.unifiedMetadataFieldId);
+			if (unified) refKeys.add(unified.key);
+		}
+		return refKeys;
+	}
+
 	protected renderCommonSections(
 		shell: { createSection: (title: string, className?: string, presentation?: ReturnType<typeof taskFieldRule>) => HTMLElement },
 		ctx: TaskFormContext,
 	): void {
 		const taskType = ctx.taskType;
 		const presentation = (field: TaskFormField) => taskFieldRule(taskType, field);
+		// 内置字段可见性受 taskMetadataSettings.customFieldRefs 控制（与 CreateSubtaskModal 一致）
+		const refKeys = this.getCustomFieldRefKeys(ctx.manager);
 
 		// 基本信息
 		const identityEl = shell.createSection('基本信息');
 		if (taskFieldEnabled(taskType, 'title')) fieldSetting(identityEl, '标题', taskType, 'title').addText((text) =>
 			text.setValue(ctx.state.title).onChange(ctx.onTitleChange),
 		);
-		if (taskFieldEnabled(taskType, 'priority')) fieldSetting(identityEl, '优先级', taskType, 'priority').addDropdown((dropdown) => {
+		if (taskFieldEnabled(taskType, 'priority') && refKeys.has('priority')) fieldSetting(identityEl, '优先级', taskType, 'priority').addDropdown((dropdown) => {
 			for (const option of taskFieldOptions(taskType, 'priority')) dropdown.addOption(option.id, option.name);
 			dropdown.setValue(ctx.state.priority).onChange(ctx.onPriorityChange);
 		});
 
 		// 计划与人员
-		const planningEl = shell.createSection('计划与人员');
+		const planningEl = shell.createSection('计划与人员', 'op-task-dialog-section-wide');
 		renderReporterField(planningEl, taskType, ctx.manager.globalConfig.people, ctx.state.reporterId, ctx.onReporterChange);
 		renderAssigneeField(planningEl, taskType, ctx.manager.globalConfig.people, ctx.state.assigneeId, ctx.onAssigneeChange);
+		// 跳过不在 customFieldRefs 中的日期字段
+		const skipDateFields = new Set<string>();
+		if (!refKeys.has('scheduledDate')) skipDateFields.add('scheduledDate');
+		if (!refKeys.has('dueDate')) skipDateFields.add('dueDate');
+		if (!refKeys.has('startDate')) skipDateFields.add('startDate');
+		if (!refKeys.has('endDate')) skipDateFields.add('endDate');
 		renderDateFields(planningEl, taskType, {
 			scheduledDate: ctx.state.scheduledDate,
 			startDate: ctx.state.startDate,
 			dueDate: ctx.state.dueDate,
 			endDate: ctx.state.endDate,
-		}, ctx.onDateChange);
-		renderTagsField(planningEl, taskType, ctx.manager, ctx.state.tags, ctx.onTagsChange);
-		renderCustomFields(planningEl, ctx.project as any, ctx.state.taskTypeId, ctx.state.custom, ctx.manager, ctx.onCustomFieldChange);
+		}, ctx.onDateChange, skipDateFields);
+		// tags 字段也受 customFieldRefs 控制
+		const skipTags = refKeys.has('tags') ? undefined : new Set(['tags']);
+		renderTagsField(planningEl, taskType, ctx.manager, ctx.state.tags, ctx.onTagsChange, skipTags);
+		renderCustomFields(planningEl, ctx.project as any, ctx.state.taskTypeId, ctx.state.custom, ctx.manager, ctx.onCustomFieldChange, ctx.effectiveCustomFieldRefs);
 
 		// 项目描述
 		if (taskFieldEnabled(taskType, 'body')) {

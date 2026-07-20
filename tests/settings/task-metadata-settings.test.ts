@@ -29,7 +29,7 @@ describe('task metadata settings', () => {
 		expect(editor).toContain("setButtonText('新增任务元数据')");
 		expect(editor).toContain("setTooltip('删除任务元数据')");
 		expect(editor).toContain('new Menu()');
-		expect(editor).toContain("setTitle('新增自定义任务元数据')");
+		expect(editor).toContain("setTitle('新增自定义任务元数据（旧版）')");
 		expect(editor).not.toContain('setDisabled(!selectedField)');
 	});
 

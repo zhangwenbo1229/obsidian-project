@@ -9,7 +9,6 @@ import { localDate } from '../utils/dates';
 import { createUuid } from '../utils/ids';
 import {
 	bindDashboardFilter,
-	BUILT_IN_DASHBOARD_CARD_IDS,
 	calculateDashboardResizePreview,
 	createDashboardCard,
 	deleteDashboardCard,
@@ -23,6 +22,7 @@ import { restoreProjectFilter } from './saved-project-filters';
 import { filterProjectTasks, overdueTasks, pendingTasks, taskStatistics } from './selectors';
 import { renderTaskCardFields } from './task-card-fields';
 import { bindTaskCardActivation } from './task-card-interaction';
+import { openTaskCardContextMenu } from './task-card-context-menu';
 import { DASHBOARD_MODULE_DEFINITIONS, getDashboardModuleDefinition } from './dashboard-modules/registry';
 import { renderModuleMessage } from './dashboard-modules/card-ui';
 
@@ -298,13 +298,11 @@ export class PersonalView extends ItemView {
 				createUuid(),
 			)).then(() => this.render());
 		}));
-		if (!BUILT_IN_DASHBOARD_CARD_IDS.has(card.id)) {
-			menu.addItem((item) => item.setTitle('删除卡片').setIcon('trash-2').onClick(() => {
-				void this.manager.savePersonalDashboardLayout(
-					deleteDashboardCard(this.manager.personalDashboardLayout, card.id),
-				).then(() => this.render());
-			}));
-		}
+		menu.addItem((item) => item.setTitle('删除卡片').setIcon('trash-2').onClick(() => {
+			void this.manager.savePersonalDashboardLayout(
+				deleteDashboardCard(this.manager.personalDashboardLayout, card.id),
+			).then(() => this.render());
+		}));
 		if (getDashboardModuleDefinition(card.kind)) {
 			menu.showAtMouseEvent(event);
 			return;
@@ -432,6 +430,7 @@ export class PersonalView extends ItemView {
 				titleClassName: 'op-task-card-title', component: this, markerBeforeKey: true,
 			});
 			bindTaskCardActivation(row, () => new EditTaskModal(this.manager, task).open());
-		}
+		row.addEventListener('contextmenu', (event) => openTaskCardContextMenu(event, task, this.manager));
+	}
 	}
 }

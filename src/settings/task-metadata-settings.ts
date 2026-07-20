@@ -37,9 +37,17 @@ export interface TaskMetadataCustomFieldDefinition {
 	options?: TaskMetadataOption[];
 }
 
+export interface TaskMetadataRef {
+	unifiedMetadataFieldId: string;
+	showInTaskView: boolean;
+	showInProjectCards: boolean;
+}
+
 export interface TaskMetadataSettings {
 	fields: Record<TaskMetadataDisplayField, TaskMetadataFieldPresentation>;
 	customFields: TaskMetadataCustomFieldDefinition[];
+	/** 迁移后使用统一元数据引用 */
+	customFieldRefs?: TaskMetadataRef[];
 }
 
 const DEFAULTS: Record<TaskMetadataDisplayField, Pick<TaskMetadataFieldPresentation, 'icon' | 'color'>> = {
@@ -103,6 +111,22 @@ function normalizeCustomFields(value: unknown): TaskMetadataCustomFieldDefinitio
 	});
 }
 
+function normalizeCustomFieldRefs(value: unknown): TaskMetadataRef[] {
+	if (!Array.isArray(value)) return [];
+	const seen = new Set<string>();
+	return value.flatMap((entry) => {
+		const source = record(entry);
+		const id = typeof source.unifiedMetadataFieldId === 'string' ? source.unifiedMetadataFieldId.trim() : '';
+		if (!id || seen.has(id)) return [];
+		seen.add(id);
+		return [{
+			unifiedMetadataFieldId: id,
+			showInTaskView: source.showInTaskView !== false,
+			showInProjectCards: source.showInProjectCards !== false,
+		}];
+	});
+}
+
 export function normalizeTaskMetadataSettings(value?: unknown): TaskMetadataSettings {
 	const source = record(value);
 	const fields = record(source.fields);
@@ -120,5 +144,6 @@ export function normalizeTaskMetadataSettings(value?: unknown): TaskMetadataSett
 			}];
 		})) as Record<TaskMetadataDisplayField, TaskMetadataFieldPresentation>,
 		customFields: normalizeCustomFields(source.customFields),
+		customFieldRefs: normalizeCustomFieldRefs(source.customFieldRefs),
 	};
 }

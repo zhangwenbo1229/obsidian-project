@@ -34,7 +34,7 @@ export class ViewDisplaySettingsEditor {
 	}
 
 	private customFields() {
-		return [...new Map(this.manager.projects.flatMap((project) => project.customFields).map((field) => [field.key, field])).values()];
+		return [...new Map(this.manager.projects.flatMap((project) => project.customFields ?? []).map((field) => [field.key, field])).values()];
 	}
 
 	private workflowStatuses() {

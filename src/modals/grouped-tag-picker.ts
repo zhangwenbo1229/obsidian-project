@@ -13,18 +13,23 @@ export function renderGroupedTagPicker(
 	selectedTags: readonly string[],
 	onChange: (tags: string[]) => void,
 	presentation?: FieldPresentation,
+	hideHeading?: boolean,
 ): void {
 	const selected = new Set(selectedTags);
 	let selectedGroupId: string | null = null;
 	let highlighted = 0;
 	const root = container.createDiv({ cls: 'op-grouped-tag-picker' });
-	const heading = root.createDiv({ cls: 'op-grouped-tag-picker-heading' });
-	const title = heading.createEl('strong', { text: '标签' });
-	applyLabelPresentation(title, presentation);
+	if (!hideHeading) {
+		const heading = root.createDiv({ cls: 'op-grouped-tag-picker-heading' });
+		const title = heading.createEl('strong', { text: '标签' });
+		applyLabelPresentation(title, presentation);
+	}
 	const workspace = root.createDiv({ cls: 'op-grouped-tag-picker-workspace' });
-	const groupRail = workspace.createDiv({ cls: 'op-grouped-tag-picker-groups', attr: { 'aria-label': '标签分组' } });
-	groupRail.createEl('label', { cls: 'op-grouped-tag-picker-group-label', text: '标签分组' });
-	const groupSelect = groupRail.createEl('select', {
+	const row = workspace.createDiv({ cls: 'op-grouped-tag-picker-row' });
+	if (!hideHeading) {
+		row.createEl('label', { cls: 'op-grouped-tag-picker-group-label', text: '标签分组' });
+	}
+	const groupSelect = row.createEl('select', {
 		cls: 'op-grouped-tag-picker-group-select',
 		attr: { 'aria-label': '选择标签分组' },
 	});
@@ -33,17 +38,18 @@ export function renderGroupedTagPicker(
 		option.value = group.id ?? '';
 	}
 	groupSelect.value = '';
-	const searchArea = workspace.createDiv({ cls: 'op-grouped-tag-picker-search' });
-	const selectedArea = searchArea.createDiv({ cls: 'op-grouped-tag-picker-selected' });
-	const input = searchArea.createEl('input', {
+	const input = row.createEl('input', {
+		cls: 'op-grouped-tag-picker-input',
 		type: 'search',
 		placeholder: '输入标签名称',
 		attr: { 'aria-label': '搜索或新建标签', autocomplete: 'off' },
 	});
-	const suggestions = searchArea.createDiv({ cls: 'op-grouped-tag-picker-suggestions', attr: { role: 'listbox' } });
+	const selectedArea = workspace.createDiv({ cls: 'op-grouped-tag-picker-selected' });
+	const suggestions = workspace.createDiv({ cls: 'op-grouped-tag-picker-suggestions', attr: { role: 'listbox' } });
 
 	const knownTags = () => [...new Set([
 		...manager.index.validTasks().flatMap((task) => task.document.metadata.tags),
+		...Object.keys(manager.tagGroupAssignments),
 		...selected,
 	])];
 	const emit = () => onChange(manager.orderTags([...selected]));
@@ -79,11 +85,16 @@ export function renderGroupedTagPicker(
 	const renderSuggestions = () => {
 		suggestions.empty();
 		const query = input.value.trim();
-		suggestions.classList.toggle('is-visible', Boolean(query));
-		if (!query) return;
 		const matches = filterTagSuggestions(
-			knownTags(), manager.tagGroups, manager.tagGroupAssignments, selectedGroupId, query, [...selected],
+			knownTags(),
+			manager.tagGroups,
+			manager.tagGroupAssignments,
+			selectedGroupId,
+			query,
+			[...selected],
 		);
+		suggestions.classList.toggle('is-visible', Boolean(query));
+		if (matches.length === 0 && !query) return;
 		highlighted = Math.min(highlighted, Math.max(0, matches.length - 1));
 		for (const [index, tag] of matches.entries()) {
 			const option = suggestions.createEl('button', {
@@ -98,7 +109,7 @@ export function renderGroupedTagPicker(
 		if (candidate && !knownTags().includes(candidate) && !selected.has(candidate)) {
 			const create = suggestions.createEl('button', {
 				cls: 'op-grouped-tag-picker-suggestion is-create',
-				text: `新建“${candidate}”`, attr: { type: 'button' },
+				text: `新建"${candidate}"`, attr: { type: 'button' },
 			});
 			create.addEventListener('mousedown', (event) => event.preventDefault());
 			create.addEventListener('click', () => void createTag());
@@ -112,8 +123,14 @@ export function renderGroupedTagPicker(
 	});
 	input.addEventListener('input', () => { highlighted = 0; renderSuggestions(); });
 	input.addEventListener('keydown', (event) => {
+		const query = input.value.trim();
 		const matches = filterTagSuggestions(
-			knownTags(), manager.tagGroups, manager.tagGroupAssignments, selectedGroupId, input.value, [...selected],
+			knownTags(),
+			manager.tagGroups,
+			manager.tagGroupAssignments,
+			selectedGroupId,
+			query,
+			[...selected],
 		);
 		if (event.key === 'ArrowDown' && matches.length) {
 			event.preventDefault(); highlighted = Math.min(matches.length - 1, highlighted + 1); renderSuggestions();

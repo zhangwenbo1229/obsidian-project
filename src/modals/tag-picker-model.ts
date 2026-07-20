@@ -39,5 +39,5 @@ export function filterTagSuggestions(
 		.filter((tag) => groupIdForTag(tag, groups, assignments) === groupId)
 		.filter((tag) => !needle || tag.toLocaleLowerCase('zh-CN').includes(needle))
 		.sort((left, right) => left.localeCompare(right, 'zh-CN'))
-		.slice(0, 30);
+		.slice(0, 3);
 }

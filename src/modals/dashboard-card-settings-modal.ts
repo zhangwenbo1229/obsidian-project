@@ -260,7 +260,7 @@ export class DashboardCardSettingsModal extends Modal {
 		group.createEl('h3', { text: '任务显示字段' });
 		group.createEl('p', { text: '字段配置仅应用于当前卡片。' });
 		const fields = group.createDiv({ cls: 'op-dashboard-sortable-fields' });
-		const customFields = [...new Map(this.manager.projects.flatMap((project) => project.customFields).map((field) => [field.key, field])).values()];
+		const customFields = [...new Map(this.manager.projects.flatMap((project) => project.customFields ?? []).map((field) => [field.key, field])).values()];
 		new SortableDisplayFields(this.displayFields, (next) => (this.displayFields = next), customFields).mount(fields);
 	}
 

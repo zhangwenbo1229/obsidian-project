@@ -6,7 +6,7 @@
 	"type": "module",
 	"scripts": {
 		"dev": "npm run build:css && node esbuild.config.mjs",
-		"build:ci": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
+		"build:ci": "npm run build:css && tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
 		"build": "npm run build:css && npm run build:ci && npm run deploy",
 		"build:css": "powershell -ExecutionPolicy Bypass -File scripts/concat-css.ps1",
 		"deploy": "node scripts/deploy.mjs",

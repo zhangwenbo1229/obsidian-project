@@ -1,8 +1,9 @@
 import { Modal, Notice, Setting } from 'obsidian';
-import type { Person, PersonMetadataFieldDefinition } from '../domain/types';
+import type { Person } from '../domain/types';
+import type { UnifiedMetadataField } from '../domain/metadata-types';
 import type { ProjectManager } from '../services/project-manager';
-import { normalizePersonMetadataValue } from '../services/person-metadata';
 import { createUuid } from '../utils/ids';
+import { renderGroupedTagPicker } from './grouped-tag-picker';
 import { applyFieldPresentation } from '../views/field-presentation';
 
 export class PersonModal extends Modal {
@@ -25,13 +26,25 @@ export class PersonModal extends Modal {
 			.setPlaceholder('输入人员姓名').setValue(this.value.name).onChange((name) => (this.value.name = name)));
 		new Setting(this.contentEl).setName('启用').addToggle((toggle) => toggle
 			.setValue(this.value.active).onChange((active) => (this.value.active = active)));
-		for (const field of this.manager.globalConfig.personMetadataFields.filter((item) => item.active)) this.renderMetadataField(field);
+
+		// Read person metadata refs and resolve from unifiedMetadataFields
+		const refs = this.manager.globalConfig.personMetadataRefs ?? [];
+		const unifiedFields = this.manager.globalConfig.unifiedMetadataFields ?? [];
+		const unifiedById = new Map(unifiedFields.map((f) => [f.id, f]));
+
+		for (const ref of refs) {
+			const field = unifiedById.get(ref.unifiedMetadataFieldId);
+			if (field) {
+				this.renderMetadataField(field, ref.sourceProperty);
+			}
+		}
+
 		new Setting(this.contentEl).addButton((button) => button.setButtonText('保存人员').setCta().onClick(() => void this.save()));
 	}
 
-	private renderMetadataField(field: PersonMetadataFieldDefinition): void {
-		const setting = new Setting(this.contentEl).setName(field.title).setDesc(field.sourceProperty ? `来源属性：${field.sourceProperty}` : field.key);
-		applyFieldPresentation(setting, field);
+	private renderMetadataField(field: UnifiedMetadataField, sourceProperty?: string): void {
+		const setting = new Setting(this.contentEl).setName(field.name).setDesc(sourceProperty ? `来源属性：${sourceProperty}` : field.key);
+		applyFieldPresentation(setting, { icon: field.icon, color: field.color });
 		const current = this.value.metadata?.[field.key];
 		const update = (value: unknown) => {
 			this.value.metadata ??= {};
@@ -59,18 +72,14 @@ export class PersonModal extends Modal {
 				dropdown.setValue(typeof current === 'string' ? current : '').onChange(update);
 			});
 		} else if (field.type === 'multi-select') {
-			const selected = new Set(Array.isArray(current) ? current.map(String) : []);
-			const options = setting.controlEl.createDiv({ cls: 'op-person-metadata-multi-select' });
-			for (const option of field.options ?? []) {
-				const label = options.createEl('label');
-				const checkbox = label.createEl('input', { type: 'checkbox' });
-				checkbox.checked = selected.has(option.id);
-				label.createSpan({ text: option.name });
-				checkbox.addEventListener('change', () => {
-					if (checkbox.checked) selected.add(option.id); else selected.delete(option.id);
-					update([...selected]);
-				});
-			}
+			renderGroupedTagPicker(
+				setting.controlEl,
+				this.manager,
+				Array.isArray(current) ? (current as string[]) : [],
+				update,
+				field,
+				true,
+			);
 		} else {
 			setting.addText((text) => text.setValue(typeof current === 'string' ? current : '').onChange(update));
 		}
@@ -78,8 +87,13 @@ export class PersonModal extends Modal {
 
 	private async save(): Promise<void> {
 		try {
-			const metadata = Object.fromEntries(this.manager.globalConfig.personMetadataFields.flatMap((field) => {
-				const value = normalizePersonMetadataValue(field, this.value.metadata?.[field.key]);
+			const refs = this.manager.globalConfig.personMetadataRefs ?? [];
+			const unifiedFields = this.manager.globalConfig.unifiedMetadataFields ?? [];
+			const unifiedById = new Map(unifiedFields.map((f) => [f.id, f]));
+			const metadata = Object.fromEntries(refs.flatMap((ref) => {
+				const field = unifiedById.get(ref.unifiedMetadataFieldId);
+				if (!field) return [];
+				const value = this.value.metadata?.[field.key];
 				return value === undefined ? [] : [[field.key, value]];
 			}));
 			await this.manager.savePerson({ ...this.value, name: this.value.name.trim(), metadata });

@@ -233,7 +233,8 @@
 .op-task-metadata { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 3px 8px; }
 .op-task-metadata-item, button.op-task-metadata-item { display: inline-flex; min-width: 0; align-items: center; gap: 3px; color: var(--op-task-metadata-color, var(--text-muted)); font-size: 10px; }
 .op-task-metadata-icon { display: inline-flex; flex: none; color: inherit; }
-.op-task-metadata-icon svg { width: 12px; height: 12px; fill: currentColor; stroke: currentColor; }
+.op-task-metadata-icon svg { width: 14px; height: 14px; }
+.op-task-metadata-label { font-weight: 500; opacity: 0.85; white-space: nowrap; }
 .op-task-metadata-setting { padding: 8px 0 12px; border-bottom: 1px solid var(--background-modifier-border); }
 .op-task-custom-metadata-options { display: flex; min-width: 0; flex-wrap: wrap; gap: 6px 12px; }
 .op-task-custom-metadata-options label { display: inline-flex; align-items: center; gap: 5px; color: var(--text-muted); font-size: var(--font-ui-small); }
@@ -316,7 +317,7 @@
 .op-ip-geo { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--background-modifier-border); text-align: center; }
 .op-ip-geo-location { display: block; font-size: 0.75em; color: var(--text-muted); }
 .op-ip-geo-isp { display: block; font-size: 0.7em; color: var(--text-faint); margin-top: 2px; }
-.op-project-field-value { display: flex; align-items: center; gap: 4px; color: var(--op-project-color, var(--text-muted)); }
+.op-project-field-value { display: flex; min-width: 0; max-width: 60%; align-items: center; gap: 4px; color: var(--op-project-color, var(--text-muted)); }
 .op-project-field-icon { display: inline-flex; align-items: center; flex-shrink: 0; }
 .op-project-field-icon svg { width: 12px; height: 12px; }
 .op-project-field-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

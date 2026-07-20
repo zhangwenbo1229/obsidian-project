@@ -34,10 +34,27 @@ export class PersonnelService {
 	async savePerson(person: Person): Promise<void> {
 		const name = person.name.trim();
 		if (!name) throw new Error('人员姓名不能为空。');
-		const metadata = Object.fromEntries(this.pm.globalConfig.personMetadataFields.flatMap((field) => {
-			const value = normalizePersonMetadataValue(field, person.metadata?.[field.key]);
-			return value === undefined ? [] : [[field.key, value]];
-		}));
+		const metadata = (() => {
+			const entries = new Map<string, unknown>();
+			// 旧版 personMetadataFields
+			for (const field of this.pm.globalConfig.personMetadataFields) {
+				const value = normalizePersonMetadataValue(field, person.metadata?.[field.key]);
+				if (value !== undefined) entries.set(field.key, value);
+			}
+			// 新版 personMetadataRefs → 统一元数据字段池
+			const pool = this.pm.globalConfig.unifiedMetadataFields ?? [];
+			const unifiedById = new Map(pool.map((f) => [f.id, f]));
+			const refs = this.pm.globalConfig.personMetadataRefs ?? [];
+			for (const ref of refs) {
+				const unified = unifiedById.get(ref.unifiedMetadataFieldId);
+				if (!unified) continue;
+				const value = person.metadata?.[unified.key];
+				if (value !== undefined || value !== null || value !== '') {
+					entries.set(unified.key, value);
+				}
+			}
+			return Object.fromEntries(entries);
+		})();
 		const folder = this.pm.peopleSourceSettings.folder || DEFAULT_PERSON_DIRECTORY;
 		let sourcePath = person.sourcePath ?? personMarkdownPath(folder, name);
 		if (!person.sourcePath && await this.pm.vault.exists(sourcePath)) {

@@ -8,8 +8,11 @@ import { normalizeCheckInHistory } from '../views/dashboard-modules/check-in-mod
 import { normalizePeopleSourceSettings, type PeopleSourceSettings } from '../services/people-source';
 import { normalizeNativeSidebarSettings, type NativeSidebarSettings } from './native-sidebar-settings';
 import { normalizeGlobalPeopleConfig } from '../services/person-metadata';
+import type { UnifiedMetadataField, PersonMetadataRef, ProjectTemplateMetadataRef } from '../domain/metadata-types';
+import { BUILT_IN_FIELD_DEFINITIONS, builtInFieldId, ensureBuiltInFields } from '../domain/built-in-fields';
+import { createUuid } from '../utils/ids';
 
-export const CURRENT_CONFIGURATION_SCHEMA = 2;
+export const CURRENT_CONFIGURATION_SCHEMA = 4;
 
 export interface ConfigurationSnapshot {
 	configurationSchema?: number;
@@ -50,6 +53,12 @@ export function normalizeConfigurationSnapshot(
 	const configurationSchema = snapshot.configurationSchema ?? 1;
 	if (configurationSchema > CURRENT_CONFIGURATION_SCHEMA) {
 		throw new Error(`配置版本 ${configurationSchema} 高于当前支持版本 ${CURRENT_CONFIGURATION_SCHEMA}。`);
+	}
+	if (configurationSchema < 3) {
+		migrateToUnifiedMetadata(snapshot);
+	}
+	if (configurationSchema < 4) {
+		migrateBuiltInFieldsToRefs(snapshot);
 	}
 	const settingsSource = snapshot.personalDashboardSettings;
 	const weatherCredentials = settingsSource?.weatherCredentials;
@@ -110,11 +119,16 @@ export function normalizeConfigurationSnapshot(
 		taskTypes: project.taskTypes.map((type) => ({ ...structuredClone(type), fieldConfig: normalizeTaskFieldConfig(type.fieldConfig) })),
 		templateIds: project.templateIds ?? (project.templateId ? templateIdsByLegacyId.get(project.templateId) ?? [project.templateId] : []),
 	}));
-	const customFields = [...new Map(projects.flatMap((project) => project.customFields).map((field) => [field.key, field])).values()];
-	return {
+	const customFields = [...new Map(projects.flatMap((project) => project.customFields ?? []).map((field) => [field.key, field])).values()];
+	const result: NormalizedConfigurationSnapshot = {
 		...structuredClone(snapshot),
 		configurationSchema: CURRENT_CONFIGURATION_SCHEMA,
-		globalConfig: normalizeGlobalPeopleConfig(snapshot.globalConfig),
+		globalConfig: {
+			...normalizeGlobalPeopleConfig(snapshot.globalConfig),
+			unifiedMetadataFields: ensureBuiltInFields(
+				normalizeGlobalPeopleConfig(snapshot.globalConfig).unifiedMetadataFields ?? [],
+			),
+		},
 		projects,
 		tagOrder: [...(snapshot.tagOrder ?? [])],
 		tagStyles: structuredClone(snapshot.tagStyles ?? {}),
@@ -133,6 +147,8 @@ export function normalizeConfigurationSnapshot(
 		peopleSourceSettings: normalizePeopleSourceSettings(snapshot.peopleSourceSettings),
 		nativeSidebarSettings: normalizeNativeSidebarSettings(snapshot.nativeSidebarSettings),
 	};
+
+	return result;
 }
 
 export interface ConfigurationStore {
@@ -143,6 +159,130 @@ export interface ConfigurationStore {
 export interface LegacyConfiguration {
 	snapshot: ConfigurationSnapshot;
 	cleanup(): Promise<void>;
+}
+
+function migrateToUnifiedMetadata(snapshot: ConfigurationSnapshot): void {
+	// schema < 3: 迁移三处元数据到统一元数据池
+	const globalConfig = snapshot.globalConfig;
+	const pool = new Map<string, UnifiedMetadataField>();
+	const addToPool = (field: UnifiedMetadataField) => {
+		const key = field.key.toLowerCase();
+		if (!pool.has(key)) pool.set(key, field);
+	};
+
+	// 1. 迁移人员元数据
+	const personFields = globalConfig.personMetadataFields ?? [];
+	const personRefs: PersonMetadataRef[] = [];
+	for (const field of personFields) {
+		const unified: UnifiedMetadataField = {
+			id: field.id,
+			key: field.key,
+			name: field.title,
+			type: field.type as UnifiedMetadataField['type'],
+			icon: field.icon ?? 'user',
+			color: field.color ?? '#626f86',
+			required: (field as any).required ?? false,
+			defaultValue: null,
+			options: (field.options ?? []).map((o) => ({ id: o.id, name: o.name })),
+		};
+		addToPool(unified);
+		personRefs.push({ unifiedMetadataFieldId: unified.id, sourceProperty: field.sourceProperty });
+	}
+
+	// 2. 迁移任务元数据自定义字段
+	const taskMeta = snapshot.taskMetadataSettings;
+	if (taskMeta?.customFields) {
+		for (const field of taskMeta.customFields) {
+			addToPool({
+				id: field.id,
+				key: field.key,
+				name: field.name,
+				type: field.type as UnifiedMetadataField['type'],
+				icon: field.icon,
+				color: field.color,
+				required: field.required,
+				defaultValue: field.defaultValue,
+				options: field.options?.map((o) => ({ id: o.id, name: o.name })),
+			});
+		}
+	}
+
+	// 3. 迁移项目模板自定义字段
+	for (const project of snapshot.projects ?? []) {
+		const migratedRefs: ProjectTemplateMetadataRef[] = [];
+		for (const field of project.customFields ?? []) {
+			const id = field.id ?? createUuid();
+			addToPool({
+				id,
+				key: field.key,
+				name: field.name,
+				type: field.type as UnifiedMetadataField['type'],
+				icon: field.icon ?? 'brackets',
+				color: field.color ?? '#626f86',
+				required: field.required ?? false,
+				defaultValue: field.default ?? null,
+				options: (field.options ?? []).map((o) => ({ id: o.id, name: o.name })),
+			});
+			migratedRefs.push({
+				unifiedMetadataFieldId: id,
+				taskTypeIds: (field as { taskTypeIds?: string[] }).taskTypeIds ?? [],
+			});
+		}
+		(project as any)._migratedCustomFieldRefs = migratedRefs;
+	}
+
+	// 写入统一元数据池
+	globalConfig.unifiedMetadataFields = [...pool.values()];
+	globalConfig.personMetadataRefs = personRefs;
+	// 清除旧数据
+	globalConfig.personMetadataFields = [];
+	if (taskMeta) taskMeta.customFields = [];
+	// 清除项目模板旧自定义字段（保留引用）
+	for (const project of snapshot.projects ?? []) {
+		const refs = (project as any)._migratedCustomFieldRefs as ProjectTemplateMetadataRef[] | undefined;
+		if (refs) {
+			(project as any).customFieldRefs = refs;
+			delete (project as any)._migratedCustomFieldRefs;
+		}
+		project.customFields = undefined;
+	}
+}
+
+function migrateBuiltInFieldsToRefs(snapshot: ConfigurationSnapshot): void {
+	// schema < 4: 将 taskType.fieldConfig 中启用的内置字段添加到 customFieldRefs 引用
+	const builtInKeys = new Set(BUILT_IN_FIELD_DEFINITIONS.map((def) => def.key));
+	for (const template of snapshot.taskTemplates ?? []) {
+		const refs = template.customFieldRefs ?? [];
+		const existingIds = new Set(refs.map((r) => r.unifiedMetadataFieldId));
+		for (const taskType of template.taskTypes) {
+			const fieldConfig = taskType.fieldConfig ?? {};
+			for (const [fieldKey, rule] of Object.entries(fieldConfig)) {
+				if (!builtInKeys.has(fieldKey)) continue;
+				if (!rule?.enabled) continue;
+				const id = builtInFieldId(fieldKey);
+				if (existingIds.has(id)) continue;
+				refs.push({ unifiedMetadataFieldId: id, taskTypeIds: [] });
+				existingIds.add(id);
+			}
+		}
+		template.customFieldRefs = refs;
+	}
+	for (const project of snapshot.projects ?? []) {
+		const refs = project.customFieldRefs ?? [];
+		const existingIds = new Set(refs.map((r) => r.unifiedMetadataFieldId));
+		for (const taskType of project.taskTypes ?? []) {
+			const fieldConfig = taskType.fieldConfig ?? {};
+			for (const [fieldKey, rule] of Object.entries(fieldConfig)) {
+				if (!builtInKeys.has(fieldKey)) continue;
+				if (!rule?.enabled) continue;
+				const id = builtInFieldId(fieldKey);
+				if (existingIds.has(id)) continue;
+				refs.push({ unifiedMetadataFieldId: id, taskTypeIds: [] });
+				existingIds.add(id);
+			}
+		}
+		project.customFieldRefs = refs;
+	}
 }
 
 export async function loadOrMigrateConfiguration(

@@ -7,6 +7,7 @@ import { resizeColumnWidth, totalColumnWidth } from './column-widths';
 import { isInteractiveTaskCardTarget } from './task-card-interaction';
 import { renderTaskListField } from './task-card-fields';
 import { beginProjectListInlineEdit, projectListEditorKind } from './project-list-inline-editor';
+import { openTaskCardContextMenu } from './task-card-context-menu';
 
 export interface ProjectListColumn {
 	id: string;
@@ -92,6 +93,7 @@ export function renderProjectList(options: ProjectListRenderOptions): void {
 			row.addEventListener('click', (event) => {
 				if (!isInteractiveTaskCardTarget(event.target)) new EditTaskModal(options.manager, task).open();
 			});
+			row.addEventListener('contextmenu', (event) => openTaskCardContextMenu(event, task, options.manager));
 		}
 		rendered = Math.min(sorted.length, rendered + 100);
 	};

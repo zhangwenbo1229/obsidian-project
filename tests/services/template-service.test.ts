@@ -41,7 +41,7 @@ describe('configuration templates', () => {
 		const applied = applyConfigurationTemplates(project, [template, bug]);
 		expect(applied.templateIds).toEqual(['standard', 'bug-template']);
 		expect(applied.taskTypes.map((type) => type.id)).toEqual(['task', 'bug']);
-		expect(applied.customFields.map((field) => field.key)).toEqual(['story-points', 'severity']);
+		expect(applied.customFields?.map((field) => field.key)).toEqual(['story-points', 'severity']);
 		expect(applied.workflow).toEqual(template.workflow);
 	});
 
@@ -52,6 +52,36 @@ describe('configuration templates', () => {
 		const applied = applyConfigurationTemplates(project, [template, bug]);
 		expect(applied.customFields).toEqual([
 			expect.objectContaining({ key: 'story-points', taskTypeIds: ['task', 'bug'] }),
+		]);
+	});
+
+	it('propagates customFieldRefs from template to project so new task modal shows unified metadata fields', () => {
+		const withRefs = structuredClone(template);
+		withRefs.customFieldRefs = [
+			{ unifiedMetadataFieldId: 'field-estimate', taskTypeIds: ['task'] },
+			{ unifiedMetadataFieldId: 'field-component', taskTypeIds: [] },
+		];
+		const applied = applyConfigurationTemplates(project, [withRefs]);
+		expect(applied.customFieldRefs).toEqual([
+			{ unifiedMetadataFieldId: 'field-estimate', taskTypeIds: ['task'] },
+			{ unifiedMetadataFieldId: 'field-component', taskTypeIds: [] },
+		]);
+	});
+
+	it('merges customFieldRefs across multiple enabled templates without duplicate unified field ids', () => {
+		const primary = structuredClone(template);
+		primary.customFieldRefs = [{ unifiedMetadataFieldId: 'field-a', taskTypeIds: ['task'] }];
+		const secondary = structuredClone(template);
+		secondary.id = 'bug-template';
+		secondary.taskTypes = [{ id: 'bug', name: 'Bug', icon: 'bug', color: '#c9372c', active: true, template: '# Reproduce' }];
+		secondary.customFieldRefs = [
+			{ unifiedMetadataFieldId: 'field-a', taskTypeIds: ['bug'] },
+			{ unifiedMetadataFieldId: 'field-b', taskTypeIds: ['bug'] },
+		];
+		const applied = applyConfigurationTemplates(project, [primary, secondary]);
+		expect(applied.customFieldRefs).toEqual([
+			{ unifiedMetadataFieldId: 'field-a', taskTypeIds: ['task', 'bug'] },
+			{ unifiedMetadataFieldId: 'field-b', taskTypeIds: ['bug'] },
 		]);
 	});
 });

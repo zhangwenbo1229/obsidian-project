@@ -5,6 +5,7 @@ import type {
 	PersonMetadataFieldType,
 	PersonNamePresentation,
 } from '../domain/types';
+import type { UnifiedMetadataField } from '../domain/metadata-types';
 
 export const PERSON_METADATA_FIELD_TYPES: readonly PersonMetadataFieldType[] = [
 	'text', 'multiline-text', 'number', 'boolean', 'date', 'datetime', 'single-select', 'multi-select',
@@ -16,8 +17,29 @@ export function normalizePersonNamePresentation(value: unknown): PersonNamePrese
 	return {
 		title: text(source.title) || '人员名称',
 		...(text(source.icon) ? { icon: text(source.icon) } : { icon: 'user-round' }),
-		...(/^#[0-9a-f]{6}$/u.test(normalizedColor) ? { color: normalizedColor } : { color: '#0c66e4' }),
+		...(/^[0-9a-f]{6}$/u.test(normalizedColor) ? { color: normalizedColor } : { color: '#0c66e4' }),
+		...(text(source.unifiedMetadataFieldId) ? { unifiedMetadataFieldId: text(source.unifiedMetadataFieldId) } : {}),
 	};
+}
+
+/** 解析有效的人员名称展示配置，优先使用引用的统一元数据字段 */
+export function resolvePersonNamePresentation(
+	presentation: PersonNamePresentation | undefined,
+	pool: UnifiedMetadataField[],
+): PersonNamePresentation {
+	const base = normalizePersonNamePresentation(presentation);
+	if (base.unifiedMetadataFieldId) {
+		const ref = pool.find((f) => f.id === base.unifiedMetadataFieldId);
+		if (ref) {
+			return {
+				title: base.title,
+				icon: ref.icon || base.icon,
+				color: ref.color || base.color,
+				unifiedMetadataFieldId: base.unifiedMetadataFieldId,
+			};
+		}
+	}
+	return base;
 }
 
 function record(value: unknown): Record<string, unknown> {
@@ -126,5 +148,6 @@ export function normalizeGlobalPeopleConfig(config: GlobalConfig): GlobalConfig 
 		people,
 		personMetadataFields: fields,
 		personNamePresentation: normalizePersonNamePresentation(source.personNamePresentation),
+		unifiedMetadataFields: config.unifiedMetadataFields,
 	};
 }

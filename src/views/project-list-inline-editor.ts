@@ -10,7 +10,7 @@ export type ProjectListEditorKind = 'text' | 'number' | 'checkbox' | 'datetime-l
 
 function customField(task: IndexedTask, column: string): CustomFieldDefinition | undefined {
 	return column.startsWith('custom:')
-		? task.project.customFields.find((field) => field.key === column.slice('custom:'.length))
+		? (task.project.customFields ?? []).find((field) => field.key === column.slice('custom:'.length))
 		: undefined;
 }
 

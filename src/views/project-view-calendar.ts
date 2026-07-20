@@ -7,6 +7,7 @@ import { calendarMonthCells, calendarRangeTitle, calendarWeekDates, moveCalendar
 import { renderTaskCardFields } from './task-card-fields';
 import { bindTaskCardActivation } from './task-card-interaction';
 import { EditTaskModal } from '../modals/edit-task-modal';
+import { openTaskCardContextMenu } from './task-card-context-menu';
 import { layoutCalendarSpans, type CalendarSpanLayout } from './calendar-span-layout';
 
 export interface CalendarViewState {
@@ -95,7 +96,8 @@ function renderCalendarWeekRow(
 			keyTitleInline: true,
 		});
 		bindTaskCardActivation(button, () => new EditTaskModal(manager, task).open());
-	}
+	button.addEventListener('contextmenu', (event) => openTaskCardContextMenu(event, task, manager));
+}
 }
 
 async function moveCalendarCard(

@@ -32,6 +32,12 @@ export function serializePersonMarkdown(
 		if (value === undefined || value === null || value === '') delete frontmatter[property];
 		else frontmatter[property] = value;
 	}
+	// 也写入 person.metadata 中不在 fields 里的键（来自 personMetadataRefs 的新统一元数据）
+	for (const [key, value] of Object.entries(person.metadata ?? {})) {
+		if (fields.some((f) => f.key === key)) continue;
+		if (value === undefined || value === null || value === '') continue;
+		frontmatter[key] = value;
+	}
 	return serializeFrontmatter(
 		frontmatter,
 		existing?.body.trim() ? existing.body : `# ${person.name}`,

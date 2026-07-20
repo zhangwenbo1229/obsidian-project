@@ -1,4 +1,4 @@
-export const SETTINGS_PAGES = ['general', 'people', 'templates', 'projects', 'personal-dashboard', 'view-display', 'task-metadata', 'configuration-data'] as const;
+export const SETTINGS_PAGES = ['general', 'people', 'templates', 'projects', 'personal-dashboard', 'view-display', 'task-metadata', 'metadata', 'configuration-data'] as const;
 export type SettingsRootPage = typeof SETTINGS_PAGES[number];
 export type SettingsPage = SettingsRootPage | 'project-detail';
 

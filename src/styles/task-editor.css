@@ -54,7 +54,7 @@
 
 .op-task-custom-fields {
 	display: grid;
-	grid-template-columns: repeat(4, minmax(0, 1fr));
+	grid-template-columns: repeat(2, minmax(0, 1fr));
 	gap: 0 12px;
 }
 .op-task-custom-fields > .setting-item { min-width: 0; align-items: stretch; flex-direction: column; gap: 6px; }
@@ -64,6 +64,7 @@
 .op-task-custom-fields > .setting-item select,
 .op-task-custom-fields > .setting-item textarea { width: 100%; }
 .op-task-custom-fields > .setting-item:has(textarea),
+.op-task-custom-fields > .setting-item:has(.op-grouped-tag-picker),
 .op-task-custom-fields > .op-task-dialog-empty { grid-column: 1 / -1; }
 
 .op-task-dialog-section textarea {

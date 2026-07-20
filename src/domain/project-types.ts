@@ -1,5 +1,6 @@
 import type { Uuid, IsoDateTime } from './common-types';
 import type { TaskTypeDefinition, CustomFieldDefinition, WorkflowDefinition } from './task-types';
+import type { ProjectTemplateMetadataRef } from './metadata-types';
 
 export interface ProjectConfig {
 	kind: 'project';
@@ -14,7 +15,9 @@ export interface ProjectConfig {
 	templateId?: string | null;
 	templateIds?: string[];
 	taskTypes: TaskTypeDefinition[];
-	customFields: CustomFieldDefinition[];
+	customFields?: CustomFieldDefinition[];
+	/** 迁移后使用统一元数据引用 */
+	customFieldRefs?: ProjectTemplateMetadataRef[];
 	workflow: WorkflowDefinition;
 	icon?: string;
 	color?: string;

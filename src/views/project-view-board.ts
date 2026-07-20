@@ -7,6 +7,7 @@ import type { TaskDisplayField } from '../domain/types';
 import { renderTaskCardFields } from './task-card-fields';
 import { bindTaskCardActivation } from './task-card-interaction';
 import { EditTaskModal } from '../modals/edit-task-modal';
+import { openTaskCardContextMenu } from './task-card-context-menu';
 
 export function renderBoardView(
 	parent: HTMLElement,
@@ -79,6 +80,7 @@ function renderBoardCard(
 	card.draggable = draggable;
 	if (draggable) card.addEventListener('dragstart', (event) => event.dataTransfer?.setData('text/plain', task.document.metadata.uid));
 	bindTaskCardActivation(card, () => new EditTaskModal(manager, task).open());
+	card.addEventListener('contextmenu', (event) => openTaskCardContextMenu(event, task, manager));
 }
 
 async function moveCard(
